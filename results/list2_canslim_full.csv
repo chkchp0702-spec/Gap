@@ -1,11 +1,17 @@
 ﻿C,A,N,S,L,I,M,n_pass,verdict,name,ticker,market,last,gap_pct,vol_mult
-unknown,fail,pass,unknown,pass,unknown,fail,2,fail,千金药业,600479.SS,CN,13.37,8.9,17.82
-unknown,fail,pass,unknown,fail,unknown,fail,1,fail,ガンホー・オンライン・エンターテイメント,3765.T,JP,2627.0,4.6,7.25
-fail,fail,pass,unknown,fail,unknown,fail,1,fail,时代出版,600551.SS,CN,9.08,5.8,20.49
-unknown,unknown,pass,unknown,fail,unknown,fail,1,fail,関西電力,9503.T,JP,2955.0,3.2,3.19
-fail,pass,pass,unknown,fail,unknown,fail,2,fail,赛轮轮胎,601058.SS,CN,15.5,4.4,2.08
-unknown,unknown,pass,unknown,pass,unknown,pass,3,partial,argenx SE - American Depositary Shares,ARGX,US,1031.66,8.8,2.02
-unknown,unknown,pass,unknown,fail,unknown,fail,1,fail,シーイーシー,9692.T,JP,2541.0,5.2,3.33
-unknown,fail,pass,unknown,fail,unknown,fail,1,fail,壱番屋,7630.T,JP,1117.0,5.4,11.34
-unknown,fail,fail,unknown,fail,unknown,fail,0,fail,安科生物,300009.SZ,CN,8.55,7.4,8.41
-unknown,unknown,pass,unknown,fail,unknown,fail,1,fail,优宁维,301166.SZ,CN,29.4,3.8,4.11
+unknown,fail,fail,unknown,fail,unknown,fail,0,fail,千金药业,600479.SS,CN,12.15,8.9,17.82
+fail,pass,pass,unknown,fail,unknown,pass,3,fail,Novartis AG Common Stock,NVS,US,161.25,6.2,2.38
+unknown,fail,fail,pass,fail,unknown,fail,1,fail,ガンホー・オンライン・エンターテイメント,3765.T,JP,2670.0,4.6,7.25
+unknown,fail,fail,pass,fail,pass,fail,2,fail,関西電力,9503.T,JP,2810.5,3.2,3.19
+fail,fail,fail,pass,fail,pass,fail,2,fail,赛轮轮胎,601058.SS,CN,15.2,4.4,2.08
+fail,fail,pass,pass,pass,pass,pass,5,fail,"Merck & Company, Inc. Common Stock (ne",MRK,US,149.86,6.5,3.25
+fail,pass,pass,pass,pass,fail,pass,5,fail,"Targa Resources, Inc. Common Stock",TRGP,US,296.06,5.5,2.07
+fail,pass,pass,pass,fail,pass,pass,5,fail,"Urban Outfitters, Inc. - Common Stock",URBN,US,79.29,3.2,3.29
+fail,fail,fail,pass,fail,fail,pass,2,fail,"Estee Lauder Companies, Inc. (The) Com",EL,US,100.0,9.4,4.89
+unknown,fail,fail,pass,pass,pass,fail,3,fail,ＩＢＪ,6071.T,JP,957.0,4.3,12.06
+unknown,fail,fail,pass,fail,pass,fail,2,fail,シーイーシー,9692.T,JP,2568.0,5.2,3.33
+unknown,fail,pass,pass,pass,pass,pass,5,fail,The J.M. Smucker Company Common Stock,SJM,US,131.42,6.8,2.06
+unknown,fail,fail,pass,fail,pass,fail,2,fail,朝日インテック,7747.T,JP,3770.0,4.6,3.3
+unknown,fail,fail,pass,fail,fail,fail,1,fail,安科生物,300009.SZ,CN,8.43,7.4,8.41
+unknown,fail,fail,pass,fail,fail,fail,1,fail,优宁维,301166.SZ,CN,29.27,3.8,4.11
+unknown,fail,fail,pass,fail,fail,fail,1,fail,华森制药,002907.SZ,CN,14.82,9.3,2.54
