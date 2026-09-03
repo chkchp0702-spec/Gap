@@ -1,15 +1,11 @@
 ﻿C,A,N,S,L,I,M,n_pass,verdict,name,ticker,market,last,gap_pct,vol_mult
-fail,pass,pass,pass,fail,pass,pass,5,fail,Novartis AG Common Stock,NVS,US,162.46,6.2,2.37
-unknown,fail,fail,pass,pass,pass,fail,3,fail,千金药业,600479.SS,CN,13.37,8.9,17.82
-unknown,fail,fail,pass,fail,pass,fail,2,fail,ガンホー・オンライン・エンターテイメント,3765.T,JP,2627.0,4.6,7.25
-fail,fail,fail,pass,fail,fail,fail,1,fail,时代出版,600551.SS,CN,9.08,5.8,20.49
-unknown,fail,fail,pass,fail,pass,fail,2,fail,関西電力,9503.T,JP,2955.0,3.2,3.19
-fail,fail,fail,pass,fail,pass,fail,2,fail,赛轮轮胎,601058.SS,CN,15.5,4.4,2.08
-fail,fail,pass,pass,pass,pass,pass,5,fail,"Merck & Company, Inc. Common Stock (ne",MRK,US,151.64,6.5,3.25
-fail,pass,pass,pass,fail,pass,pass,5,fail,"Urban Outfitters, Inc. - Common Stock",URBN,US,78.75,3.2,3.29
-fail,fail,fail,pass,fail,fail,pass,2,fail,"Estee Lauder Companies, Inc. (The) Com",EL,US,101.15,9.4,4.89
-unknown,fail,fail,pass,fail,pass,fail,2,fail,シーイーシー,9692.T,JP,2541.0,5.2,3.33
-unknown,fail,pass,pass,pass,pass,pass,5,fail,The J.M. Smucker Company Common Stock,SJM,US,131.44,6.8,2.06
-unknown,fail,fail,pass,fail,pass,fail,2,fail,壱番屋,7630.T,JP,1117.0,5.4,11.34
-unknown,fail,fail,pass,fail,fail,fail,1,fail,安科生物,300009.SZ,CN,8.55,7.4,8.41
-unknown,fail,fail,pass,fail,fail,fail,1,fail,优宁维,301166.SZ,CN,29.4,3.8,4.11
+fail,pass,pass,unknown,fail,unknown,pass,3,fail,Novartis AG Common Stock,NVS,US,163.09,6.2,2.38
+fail,fail,pass,unknown,pass,unknown,pass,3,fail,Principal Financial Group Inc - Common,PFG,US,118.51,3.6,2.66
+fail,pass,pass,unknown,fail,unknown,fail,2,fail,赛轮轮胎,601058.SS,CN,15.45,4.4,2.08
+unknown,fail,pass,unknown,pass,unknown,fail,2,fail,千金药业,600479.SS,CN,14.26,8.9,17.82
+fail,pass,pass,unknown,fail,unknown,pass,3,fail,"Urban Outfitters, Inc. - Common Stock",URBN,US,80.58,3.2,3.29
+fail,fail,fail,unknown,fail,unknown,fail,0,fail,时代出版,600551.SS,CN,7.96,5.8,20.49
+unknown,fail,fail,unknown,fail,unknown,fail,0,fail,小方制药,603207.SS,CN,25.95,6.3,5.78
+unknown,fail,fail,unknown,fail,unknown,fail,0,fail,安科生物,300009.SZ,CN,8.4,7.4,8.41
+unknown,unknown,fail,unknown,fail,unknown,fail,0,fail,优宁维,301166.SZ,CN,28.7,3.8,4.11
+unknown,unknown,pass,unknown,fail,unknown,pass,2,fail,The J.M. Smucker Company Common Stock,SJM,US,128.51,6.8,2.06
