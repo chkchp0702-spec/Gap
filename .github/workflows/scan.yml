@@ -1,0 +1,1427 @@
+name: 갭 돌파 매일 스캔
+
+on:
+  schedule:
+    - cron: "30 20 * * 0-4"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 130
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: PDF 도구 설치
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq wkhtmltopdf fonts-noto-cjk
+
+      - run: pip install -q numpy pandas yfinance pykrx finance-datareader akshare openpyxl xlrd lxml html5lib requests
+
+      - name: 스크립트 생성
+        run: |
+          cat > scan.py << 'PYTHON_EOF'
+          import os, time, math, signal, warnings
+          warnings.filterwarnings("ignore")
+          import numpy as np, pandas as pd, yfinance as yf
+
+          T0 = time.time()
+
+
+          class Deadline(Exception):
+              pass
+
+
+          def _alarm(signum, frame):
+              raise Deadline()
+
+
+          signal.signal(signal.SIGALRM, _alarm)
+
+
+          def set_deadline(minutes):
+              """조회 한 건이 응답 없이 매달려도 강제로 빠져나오게 한다."""
+              signal.alarm(max(1, int(minutes * 60)))
+
+
+          def clear_deadline():
+              signal.alarm(0)
+
+          BUDGET = float(os.environ.get("TIME_BUDGET_MIN", "70"))
+          TOPF = int(os.environ.get("TOP_FUND", "250"))
+          os.makedirs("results", exist_ok=True)
+          left = lambda: BUDGET - (time.time() - T0) / 60
+          log = lambda m: print(f"[{(time.time()-T0)/60:5.1f}분] {m}", flush=True)
+
+          # --- 갭 돌파 검출 ---------------------------------------------------------
+          P = dict(
+              # --- 횡보 구간 ---
+              consol_bars=90,      # 갭 직전 몇 거래일을 횡보 구간으로 볼지 (약 4.5개월)
+              consol_min=40,       # 최소 이만큼은 있어야 '몇 달 횡보'라 부를 수 있음
+              range_max=0.28,      # 횡보 구간 고저 폭 상한 (28%). 넓으면 횡보가 아님
+              drift_max=0.20,      # 구간 전·후반 중간값 차이 상한. 이미 추세면 횡보 아님
+
+              # --- 갭 ---
+              gap_min=0.03,        # 시가가 전일 고가보다 3% 이상 위
+              gap_max=0.35,        # 35% 넘는 갭은 이벤트성(유상증자·합병 등) 의심
+              clear_high=True,     # 갭일 종가가 횡보 고가를 넘어야 함
+              close_above_open=-0.03,  # 갭일 종가가 시가 대비 -3% 이상 (윗꼬리 음봉 배제)
+
+              # --- 거래량 ---
+              vol_mult=2.0,        # 갭일 거래량이 50일 평균의 2배 이상
+
+              # --- 신선도 / 유지 ---
+              max_days=10,         # 갭 이후 10거래일 이내만 후보
+              hold_ratio=0.5,      # 갭 폭의 절반 이상을 지키고 있어야 함
+
+              # --- 기본 ---
+              min_bars=150,
+
+              # --- 상위 목록 선정 (엄격) ---
+              top_days=5,          # 갭 후 5거래일 이내
+              top_vol=2.5,         # 거래량 2.5배 이상
+              top_range=22,        # 횡보 폭 22% 이내
+              top_weeks_min=8,     # 횡보 8주 이상
+              top_from_gap=10,     # 갭 시가 대비 +10% 이내 (추격 한계)
+              top_ath_off=0.10,    # 사상최고가 -10% 이내
+              top_rs_min=80,       # 상대강도 80 이상
+          )
+
+
+          def find_gaps(df, tk="", mkt="", minp=0, minvol=0, p=None):
+              """
+              조건을 만족하는 가장 최근 갭 하나를 반환. 없으면 빈 리스트.
+              """
+              p = p or P
+              if df is None or len(df) < p["min_bars"]:
+                  return []
+              df = df.dropna(subset=["open", "high", "low", "close", "volume"])
+              if len(df) < p["min_bars"]:
+                  return []
+
+              o, h, l, c, v = (df[x].to_numpy(float)
+                               for x in ("open", "high", "low", "close", "volume"))
+              n, dts = len(df), df.index
+              last = float(c[-1])
+              if minp and last < minp:
+                  return []
+
+              v50 = float(np.nanmean(v[-50:]))
+              advol = float(np.nanmean(c[-50:] * v[-50:]))
+              if minvol and advol < minvol:
+                  return []
+
+              # 상대강도용 원점수
+              rs = None
+              if n >= 252:
+                  rs = float(2 * (c[-1] / c[-63] - 1) + (c[-1] / c[-126] - 1)
+                             + (c[-1] / c[-189] - 1) + (c[-1] / c[-252] - 1))
+
+              # 최근 갭부터 거슬러 검사 (오늘 ~ max_days 전)
+              for gi in range(n - 1, max(p["min_bars"] - 1, n - 1 - p["max_days"]) - 1, -1):
+                  if gi < 1:
+                      break
+
+                  # 1) 진짜 갭인가 — 시가가 전일 고가보다 위
+                  prev_h = h[gi - 1]
+                  if o[gi] <= prev_h:
+                      continue
+                  gap = o[gi] / prev_h - 1
+                  if not (p["gap_min"] <= gap <= p["gap_max"]):
+                      continue
+
+                  # 갭일 종가가 시가 대비 지나치게 밀리면 제외 (윗꼬리 음봉)
+                  if c[gi] / o[gi] - 1 < p["close_above_open"]:
+                      continue
+
+                  # 2) 갭 직전 횡보 구간
+                  cs = max(0, gi - p["consol_bars"])
+                  if gi - cs < p["consol_min"]:
+                      continue
+                  ch = float(np.max(h[cs:gi]))          # 횡보 구간 고가 = 매물대 상단
+                  cl = float(np.min(l[cs:gi]))
+                  if ch <= 0:
+                      continue
+                  rng = 1 - cl / ch
+                  if rng > p["range_max"]:
+                      continue                           # 폭이 넓으면 횡보가 아님
+
+                  # 이미 추세 진행 중이면 '횡보'가 아니다
+                  mid = (gi + cs) // 2
+                  m1 = float(np.median(c[cs:mid])) if mid > cs else float(c[cs])
+                  m2 = float(np.median(c[mid:gi])) if gi > mid else float(c[gi - 1])
+                  if m1 > 0 and abs(m2 / m1 - 1) > p["drift_max"]:
+                      continue
+
+                  # 3) 갭으로 매물대를 넘었는가
+                  if p["clear_high"] and c[gi] <= ch:
+                      continue
+
+                  # 4) 거래량
+                  base = float(np.nanmean(v[max(0, gi - 50):gi])) or v50
+                  vr = v[gi] / base if base else 0.0
+                  if vr < p["vol_mult"]:
+                      continue
+
+                  # 5) 갭을 지키고 있는가
+                  days = n - 1 - gi
+                  floor_ = prev_h + (o[gi] - prev_h) * p["hold_ratio"]
+                  held = bool(np.min(c[gi:]) >= floor_)
+
+                  hi52 = float(np.max(h[-252:])) if n >= 252 else float(np.max(h))
+                  off52 = 1 - last / hi52 if hi52 > 0 else 1.0
+
+                  return [dict(
+                      ticker=tk, market=mkt, name="",
+                      last=round(last, 2),
+                      gap_date=str(dts[gi].date()),
+                      days=days,
+                      gap_pct=round(gap * 100, 1),
+                      gap_open=round(float(o[gi]), 2),
+                      wall=round(ch, 2),                 # 넘어선 매물대 상단
+                      over_wall=round((last / ch - 1) * 100, 1),
+                      consol_days=gi - cs,
+                      consol_weeks=round((gi - cs) / 5, 1),
+                      range_pct=round(rng * 100, 1),
+                      vol_mult=round(vr, 2),
+                      held=held,
+                      hold_floor=round(floor_, 2),
+                      from_gap=round((last / o[gi] - 1) * 100, 1),
+                      off52=round(off52 * 100, 1),
+                      advol=round(advol, 0),
+                      rs_raw=rs,
+                      bars=n,
+                      newly=bool(n < 400),
+                  )]
+              return []
+
+
+          # --- 캔슬림 ----------------------------------------------------------------
+          def yoy(s):
+              if s is None or len(s) < 5:
+                  return None
+              a, b = s.iloc[0], s.iloc[4]
+              if pd.isna(a) or pd.isna(b) or b == 0 or b < 0:
+                  return None
+              return float(a / b - 1)
+
+
+          def cagr(s, y=3):
+              if s is None or len(s) < y + 1:
+                  return None
+              a, b = s.iloc[0], s.iloc[y]
+              if pd.isna(a) or pd.isna(b) or b <= 0 or a <= 0:
+                  return None
+              return float((a / b) ** (1 / y) - 1)
+
+
+          def canslim(f, px, rs_pct, regime):
+              g = {}
+              e, s_ = yoy(f.get("qe")), yoy(f.get("qr"))
+              g["C"] = "unknown" if e is None else (
+                  "pass" if e >= .25 and (s_ is None or s_ >= .20) else "fail")
+
+              cg, roe = cagr(f.get("ae")), f.get("roe")
+              if cg is None and roe is None:
+                  g["A"] = "unknown"
+              else:
+                  okc, okr = (cg is not None and cg >= .25), (roe is not None and roe >= .17)
+                  g["A"] = "pass" if (cg is None or okc) and (roe is None or okr) \
+                           and (okc or okr) else "fail"
+
+              if px is not None and len(px) >= 60:
+                  w = px["close"].tail(252)
+                  off = 1 - float(w.iloc[-1]) / float(w.max())
+                  g["N"] = "pass" if off <= .15 else "fail"
+              else:
+                  g["N"] = "unknown"
+
+              sh = f.get("shares")
+              g["S"] = "unknown" if not sh else ("pass" if sh <= 5e9 else "fail")
+              g["L"] = "unknown" if rs_pct is None else ("pass" if rs_pct >= 80 else "fail")
+              ip = f.get("inst")
+              g["I"] = "unknown" if ip is None else ("pass" if .05 <= ip <= .95 else "fail")
+              g["M"] = "unknown" if not regime else ("pass" if regime == "uptrend" else "fail")
+
+              npass = sum(x == "pass" for x in g.values())
+              req = all(g[k] == "pass" for k in "CALM")
+              g["n_pass"] = npass
+              g["verdict"] = "canslim" if (req and npass >= 5) else (
+                  "fail" if any(g[k] == "fail" for k in "CALM") else "partial")
+              return g
+
+
+          # --- 종목 목록 -------------------------------------------------------------
+          def u_hk():
+              d = pd.read_excel("https://www.hkex.com.hk/eng/services/trading/securities/"
+                                "securitieslists/ListOfSecurities.xlsx", skiprows=2)
+              d.columns = [str(x).strip() for x in d.columns]
+              cc = next(x for x in d.columns if "Stock Code" in x)
+              cn = next(x for x in d.columns if "Name of Securities" in x)
+              cg = next((x for x in d.columns if "Category" in x), None)
+              o = []
+              for _, r in d.iterrows():
+                  try:
+                      k = int(str(r[cc]).strip())
+                  except Exception:
+                      continue
+                  if cg and "Equity" not in str(r[cg]):
+                      continue
+                  o.append((f"{k:04d}.HK", str(r[cn])[:28]))
+              return o
+
+
+          def u_kr():
+              """
+              한국 종목 목록. 경로를 여러 개 준비한다.
+                1순위 FinanceDataReader — KRX 와 다른 경로를 쓴다
+                2순위 pykrx — 휴장일 대비로 최근 12일을 훑는다
+                3순위 네이버 상장목록
+              실패 사유를 그대로 남겨서 다음에 원인을 알 수 있게 한다.
+              """
+              errs = []
+
+              # 1) FinanceDataReader
+              try:
+                  import FinanceDataReader as fdr
+                  df = fdr.StockListing("KRX")
+                  cc = next((c for c in ("Code", "Symbol", "종목코드") if c in df.columns), None)
+                  cn = next((c for c in ("Name", "종목명") if c in df.columns), None)
+                  mk = next((c for c in ("Market", "시장구분") if c in df.columns), None)
+                  if cc:
+                      o = []
+                      for _, r in df.iterrows():
+                          c = str(r[cc]).strip().zfill(6)
+                          if not c.isdigit() or len(c) != 6:
+                              continue
+                          m = str(r[mk]).upper() if mk else ""
+                          if "KONEX" in m:
+                              continue
+                          sfx = ".KQ" if "KOSDAQ" in m else ".KS"
+                          o.append((c + sfx, str(r[cn])[:20] if cn else c))
+                      if len(o) > 1000:
+                          print(f"    (한국: FinanceDataReader 성공 {len(o)}개)", flush=True)
+                          return o
+                      errs.append(f"fdr:{len(o)}개뿐")
+              except Exception as e:
+                  errs.append(f"fdr:{type(e).__name__}")
+
+              # 2) pykrx
+              try:
+                  from pykrx import stock
+                  from datetime import datetime, timedelta
+                  for back in range(12):
+                      d = (datetime.now() - timedelta(days=back)).strftime("%Y%m%d")
+                      try:
+                          o = []
+                          for m, sfx in [("KOSPI", ".KS"), ("KOSDAQ", ".KQ")]:
+                              try:
+                                  ser = stock.get_market_ticker_and_name(d, market=m)
+                                  o += [(str(t) + sfx, str(n)) for t, n in ser.items()]
+                              except Exception:
+                                  for t in stock.get_market_ticker_list(d, market=m):
+                                      o.append((str(t) + sfx, str(t)))
+                          if len(o) > 1000:
+                              print(f"    (한국: pykrx 성공 {len(o)}개, {d})", flush=True)
+                              return o
+                      except Exception as e:
+                          last = f"pykrx:{type(e).__name__}"
+                  errs.append(last if "last" in dir() else "pykrx:빈결과")
+              except Exception as e:
+                  errs.append(f"pykrx:{type(e).__name__}")
+
+              # 3) 네이버 상장목록
+              try:
+                  frames = []
+                  for mkt, sfx in [(0, ".KS"), (1, ".KQ")]:
+                      u = ("https://kind.krx.co.kr/corpgeneral/corpList.do"
+                           f"?method=download&marketType={'stockMkt' if mkt==0 else 'kosdaqMkt'}")
+                      t = pd.read_html(u, encoding="euc-kr")[0]
+                      cc = next(c for c in t.columns if "종목코드" in str(c))
+                      cn = next(c for c in t.columns if "회사명" in str(c))
+                      for _, r in t.iterrows():
+                          c = str(int(r[cc])).zfill(6)
+                          frames.append((c + sfx, str(r[cn])[:20]))
+                  if len(frames) > 1000:
+                      print(f"    (한국: KIND 성공 {len(frames)}개)", flush=True)
+                      return frames
+                  errs.append(f"kind:{len(frames)}개뿐")
+              except Exception as e:
+                  errs.append(f"kind:{type(e).__name__}")
+
+              raise RuntimeError(" / ".join(errs))
+
+
+          def u_jp():
+              """
+              일본 종목 목록. JPX 는 기본 요청(urllib)을 봇으로 보고 403 을 준다.
+              브라우저처럼 보이는 헤더를 붙여 requests 로 받아야 통과한다.
+              """
+              URL = ("https://www.jpx.co.jp/markets/statistics-equities/misc/"
+                     "tvdivq0000001vg2-att/data_j.xls")
+              UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36")
+
+              def parse(d):
+                  cc = next(x for x in d.columns if "コード" in str(x))
+                  cn = next(x for x in d.columns if "銘柄名" in str(x))
+                  cm = next((x for x in d.columns if "市場" in str(x)), None)
+                  o = []
+                  for _, r in d.iterrows():
+                      try:
+                          k = int(r[cc])
+                      except Exception:
+                          continue
+                      if cm is not None and "ETF" in str(r[cm]):
+                          continue
+                      o.append((f"{k}.T", str(r[cn])[:28]))
+                  return o
+
+              # 1) requests + 브라우저 헤더
+              for _a in range(3):
+                  try:
+                      import requests
+                      import io as _io
+                      rsp = requests.get(URL, timeout=60,
+                                         headers={"User-Agent": UA,
+                                                  "Referer": "https://www.jpx.co.jp/"})
+                      rsp.raise_for_status()
+                      o = parse(pd.read_excel(_io.BytesIO(rsp.content)))
+                      if len(o) > 1000:
+                          print(f"    (일본: JPX 엑셀 성공 {len(o)}개)", flush=True)
+                          return o
+                  except Exception:
+                      pass
+                  time.sleep(6)
+
+              # 2) pandas 에 헤더를 직접 전달
+              try:
+                  o = parse(pd.read_excel(URL, storage_options={"User-Agent": UA}))
+                  if len(o) > 1000:
+                      print(f"    (일본: storage_options 성공 {len(o)}개)", flush=True)
+                      return o
+              except Exception:
+                  pass
+
+              # 3) 코드 대역 생성 — 도쿄 종목코드는 4자리(1300~9999) 안에만 있다
+              print("    (일본: JPX 차단 — 코드 대역 생성으로 전환)", flush=True)
+              globals()["JP_ENUM"] = True
+              return [(f"{c}.T", f"TSE{c}") for c in range(1300, 10000)]
+
+
+          def u_cn():
+              """
+              중국 A주 종목 목록.
+
+              1순위: akshare (중국 서버) — 종목명까지 정확하지만 해외 IP를 자주 차단
+              2순위: 코드 대역 직접 생성 — 중국 서버를 안 거치므로 차단과 무관
+                      A주 코드는 정해진 대역 안에만 존재한다. 없는 코드는
+                      시세 조회에서 자동으로 걸러지므로 결과에 영향이 없다.
+              """
+              import akshare as ak
+
+              def pairs(df, cc, cn):
+                  o = []
+                  for _, r in df.iterrows():
+                      c, n = str(r[cc]).strip()[:6], str(r[cn])[:20]
+                      if not c.isdigit():
+                          continue
+                      if c.startswith("6"):
+                          o.append((c + ".SS", n))
+                      elif c.startswith(("0", "3")):
+                          o.append((c + ".SZ", n))
+                  return o
+
+              def sh_sz():
+                  """상하이·선전 거래소 사이트 각각에서 받아 합친다"""
+                  o = []
+                  for fn2, cc2, cn2 in [
+                      (ak.stock_info_sh_name_code, "证券代码", "证券简称"),
+                      (ak.stock_info_sz_name_code, "A股代码", "A股简称")]:
+                      try:
+                          o += pairs(fn2(), cc2, cn2)
+                      except Exception:
+                          pass
+                  return o
+
+              routes = [("eastmoney_code_name",
+                         lambda: ak.stock_info_a_code_name(), "code", "name"),
+                        ("sina_spot",
+                         lambda: ak.stock_zh_a_spot(), "代码", "名称"),
+                        ("eastmoney_spot",
+                         lambda: ak.stock_zh_a_spot_em(), "代码", "名称")]
+
+              # 중국 서버는 간헐적으로 막힌다. 넉넉히 재시도한다.
+              for attempt in range(5):
+                  for nm, fn, cc, cn in routes:
+                      try:
+                          o = pairs(fn(), cc, cn)
+                          if len(o) > 1000:
+                              print(f"    (중국: {nm} 성공 {len(o)}개)", flush=True)
+                              return o
+                      except Exception:
+                          pass
+                  try:                                   # 거래소 사이트 직접
+                      o = sh_sz()
+                      if len(o) > 1000:
+                          print(f"    (중국: 거래소 직접 성공 {len(o)}개)", flush=True)
+                          return o
+                  except Exception:
+                      pass
+                  if attempt < 4:
+                      time.sleep(25)
+
+              # --- 대체 경로: 코드 대역 생성 ---
+              print("    (중국 서버 차단 — 코드 대역 생성으로 전환)", flush=True)
+              globals()["CN_ENUM"] = True
+              o = []
+              for lo, hi in [(600000, 601000), (601000, 601900), (603000, 603900),
+                             (605000, 605600), (688000, 688900)]:
+                  o += [(f"{c}.SS", f"SH{c}") for c in range(lo, hi)]
+              for lo, hi in [(1, 1000), (2000, 3100), (300000, 301700)]:
+                  o += [(f"{c:06d}.SZ", f"SZ{c:06d}") for c in range(lo, hi)]
+              return o
+
+
+          def u_us():
+              o = []
+              for u, a, b in [("https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt",
+                               "Symbol", "Security Name"),
+                              ("https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt",
+                               "ACT Symbol", "Security Name")]:
+                  d = pd.read_csv(u, sep="|")
+                  for _, r in d[d[a].notna()].iterrows():
+                      s, n = str(r[a]).strip(), str(r.get(b, ""))[:38]
+                      if not s or "File Creation" in s or "test" in n.lower():
+                          continue
+                      if any(ch in s for ch in "$."):
+                          continue
+                      if str(r.get("ETF", "N")).strip().upper() == "Y":
+                          continue                      # ETF 제외
+                      if str(r.get("Test Issue", "N")).strip().upper() == "Y":
+                          continue                      # 테스트 종목 제외
+                      o.append((s, n))
+              return o
+
+
+          # (이름, 코드, 목록함수, 벤치마크, 최저가, 최저 50일 평균거래대금)
+          # 거래대금 단위는 각 시장 통화. 유동성 없는 종목을 걸러낸다.
+          MKT = [("홍콩", "HK", u_hk, "^HSI", 3, 2e7),          # 2천만 HKD
+                 ("한국", "KR", u_kr, "^KS11", 5000, 2e9),      # 20억 원
+                 ("일본", "JP", u_jp, "^N225", 500, 2e8),       # 2억 엔
+                 ("중국", "CN", u_cn, "000001.SS", 5, 5e7),     # 5천만 위안
+                 ("미국", "US", u_us, "^GSPC", 5, 5e6)]         # 500만 달러
+          LBL = {"uptrend": "상승장", "downtrend": "하락장", "neutral": "횡보장", "": "판정불가"}
+
+
+          def regime(sym):
+              try:
+                  b = None
+                  for _a in range(3):
+                      try:
+                          b = yf.Ticker(sym).history(period="2y",
+                                                     auto_adjust=False)["Close"]
+                          if b is not None and len(b) >= 200:
+                              break
+                      except Exception:
+                          b = None
+                      time.sleep(5)
+                  if b is None or len(b) < 200:
+                      return ""
+                  c, a, d = b.iloc[-1], b.rolling(50).mean().iloc[-1], b.rolling(200).mean().iloc[-1]
+                  return "uptrend" if c > a > d else ("downtrend" if c < d else "neutral")
+              except Exception:
+                  return ""
+
+
+          # --- 스캔 ------------------------------------------------------------------
+          rows, REG, stats, cut = [], {}, [], False
+          set_deadline(BUDGET * 0.80)          # 스캔에 예산의 80%까지만
+          try:
+            for nm, code, fn, bench, minp, minvol in MKT:
+                if left() < 6:
+                    cut = True
+                    log(f"시간 부족 — {nm} 이후 생략")
+                    break
+                log(f"{nm} 목록 수집")
+                try:
+                    uni = fn()
+                except Exception as e:
+                    stats.append((nm, 0, 0, f"목록 실패({type(e).__name__})"))
+                    log(f"  실패 — 건너뜀")
+                    continue
+                REG[code] = regime(bench)
+                log(f"  {len(uni):,}종목 / {LBL[REG[code]]}")
+                f0, nd = len(rows), 0
+                CH = 100                     # 묶음을 줄여 요청 부담을 낮춘다
+                for ci in range(math.ceil(len(uni) / CH)):
+                    if left() < 3:
+                        cut = True
+                        break
+                    part = uni[ci * CH:(ci + 1) * CH]
+                    syms = [p[0] for p in part]
+                    meta = dict(part)
+                    # 야후는 요청이 몰리면 막는다. 실패한 묶음은 쉬었다 다시 시도한다.
+                    data = None
+                    for _a in range(3):
+                        try:
+                            data = yf.download(syms, period="2y", group_by="ticker",
+                                               auto_adjust=False, threads=True,
+                                               progress=False)
+                            if data is not None and len(data):
+                                break
+                        except Exception:
+                            data = None
+                        if _a < 2:
+                            time.sleep(8 * (_a + 1))
+                    if data is None or len(data) == 0:
+                        nd += len(syms)
+                        time.sleep(3)
+                        continue
+                    for tk in syms:
+                        try:
+                            d = data[tk] if isinstance(data.columns, pd.MultiIndex) else data
+                            d = d.dropna(how="all").rename(columns=str.lower)
+                            if len(d) < 150:
+                                nd += 1
+                                continue
+                            for m in find_gaps(d, tk, code, minp, minvol):
+                                m["name"] = meta[tk]
+                                rows.append(m)
+                        except Exception:
+                            nd += 1
+                    time.sleep(1.0)          # 요청 간격 확보
+                note = "정상"
+                if cut:
+                    note = "시간부족 부분처리"
+                elif nd > len(uni) * .5:
+                    note = f"조회실패 {nd:,}"
+                stats.append((nm, len(uni), len(rows) - f0, note))
+                log(f"  {nm} 완료 — {len(rows)-f0}건")
+          except Deadline:
+              cut = True
+              print("  [강제마감] 조회가 응답하지 않아 스캔을 중단합니다", flush=True)
+          finally:
+              clear_deadline()
+
+          res = pd.DataFrame(rows)
+          log(f"스캔 종료 — {len(res)}건")
+
+          SEC, IND, DESC = {}, {}, {}
+          MCAP, ROE_, EPSG = {}, {}, {}
+          SECTOR_KR = {
+              "Technology": "기술·IT", "Healthcare": "헬스케어",
+              "Financial Services": "금융", "Consumer Cyclical": "경기소비재",
+              "Consumer Defensive": "필수소비재", "Industrials": "산업재",
+              "Energy": "에너지", "Basic Materials": "소재",
+              "Real Estate": "부동산", "Utilities": "유틸리티",
+              "Communication Services": "통신·미디어",
+          }
+
+
+          INDUSTRY_KR = {
+              # 기술
+              "Semiconductors": "반도체", "Semiconductor Equipment & Materials": "반도체 장비·소재",
+              "Software—Infrastructure": "소프트웨어(인프라)", "Software—Application": "소프트웨어(응용)",
+              "Information Technology Services": "IT 서비스", "Computer Hardware": "컴퓨터 하드웨어",
+              "Consumer Electronics": "가전·전자기기", "Electronic Components": "전자부품",
+              "Electronics & Computer Distribution": "전자·컴퓨터 유통",
+              "Scientific & Technical Instruments": "계측·정밀기기",
+              "Communication Equipment": "통신장비", "Solar": "태양광",
+              # 헬스케어
+              "Biotechnology": "바이오", "Drug Manufacturers—General": "제약(대형)",
+              "Drug Manufacturers—Specialty & Generic": "제약(특수·제네릭)",
+              "Medical Devices": "의료기기", "Medical Instruments & Supplies": "의료기기·소모품",
+              "Diagnostics & Research": "진단·연구", "Healthcare Plans": "건강보험",
+              "Medical Care Facilities": "의료시설", "Pharmaceutical Retailers": "의약품 유통",
+              "Health Information Services": "의료정보 서비스",
+              # 금융
+              "Banks—Regional": "지역은행", "Banks—Diversified": "종합은행",
+              "Insurance—Life": "생명보험", "Insurance—Property & Casualty": "손해보험",
+              "Insurance—Diversified": "종합보험", "Insurance Brokers": "보험중개",
+              "Insurance—Reinsurance": "재보험", "Insurance—Specialty": "특종보험",
+              "Capital Markets": "증권·자본시장", "Asset Management": "자산운용",
+              "Financial Data & Stock Exchanges": "금융정보·거래소",
+              "Credit Services": "여신·카드", "Mortgage Finance": "주택금융",
+              "Financial Conglomerates": "금융지주",
+              # 산업재
+              "Specialty Industrial Machinery": "산업기계", "Building Products & Equipment": "건축자재·설비",
+              "Engineering & Construction": "건설·엔지니어링", "Aerospace & Defense": "항공우주·방산",
+              "Farm & Heavy Construction Machinery": "농기계·중장비",
+              "Industrial Distribution": "산업재 유통", "Electrical Equipment & Parts": "전기장비·부품",
+              "Specialty Business Services": "기업 서비스", "Staffing & Employment Services": "인력 서비스",
+              "Consulting Services": "컨설팅", "Rental & Leasing Services": "임대·리스",
+              "Security & Protection Services": "보안 서비스", "Waste Management": "환경·폐기물",
+              "Conglomerates": "복합기업", "Metal Fabrication": "금속가공",
+              "Tools & Accessories": "공구·부품", "Pollution & Treatment Controls": "환경설비",
+              "Infrastructure Operations": "인프라 운영", "Business Equipment & Supplies": "사무기기",
+              # 운송
+              "Railroads": "철도", "Trucking": "육상운송", "Airlines": "항공",
+              "Marine Shipping": "해운", "Integrated Freight & Logistics": "물류",
+              "Airports & Air Services": "공항·항공서비스",
+              # 소비재
+              "Auto Manufacturers": "자동차", "Auto Parts": "자동차부품",
+              "Auto & Truck Dealerships": "자동차 판매", "Recreational Vehicles": "레저용 차량",
+              "Apparel Manufacturing": "의류 제조", "Apparel Retail": "의류 유통",
+              "Footwear & Accessories": "신발·액세서리", "Luxury Goods": "명품",
+              "Textile Manufacturing": "섬유",
+              "Restaurants": "외식", "Lodging": "숙박", "Resorts & Casinos": "리조트·카지노",
+              "Travel Services": "여행 서비스", "Leisure": "레저",
+              "Gambling": "게임·베팅", "Electronic Gaming & Multimedia": "게임·콘텐츠",
+              "Internet Retail": "온라인 유통", "Specialty Retail": "전문 유통",
+              "Department Stores": "백화점", "Home Improvement Retail": "홈인테리어 유통",
+              "Discount Stores": "할인점", "Grocery Stores": "식품 유통",
+              "Furnishings, Fixtures & Appliances": "가구·생활용품",
+              "Residential Construction": "주택건설", "Packaging & Containers": "포장재",
+              "Personal Services": "개인 서비스", "Education & Training Services": "교육",
+              # 필수소비재
+              "Packaged Foods": "가공식품", "Beverages—Non-Alcoholic": "음료(무알코올)",
+              "Beverages—Brewers": "주류(맥주)", "Beverages—Wineries & Distilleries": "주류(증류·와인)",
+              "Farm Products": "농산물", "Confectioners": "제과",
+              "Household & Personal Products": "생활용품", "Tobacco": "담배",
+              "Food Distribution": "식품 도매",
+              # 에너지·소재
+              "Oil & Gas Integrated": "석유·가스(종합)", "Oil & Gas E&P": "석유·가스 개발",
+              "Oil & Gas Refining & Marketing": "정유", "Oil & Gas Midstream": "석유·가스 수송",
+              "Oil & Gas Equipment & Services": "석유·가스 장비",
+              "Oil & Gas Drilling": "시추", "Thermal Coal": "석탄", "Uranium": "우라늄",
+              "Steel": "철강", "Aluminum": "알루미늄", "Copper": "구리",
+              "Gold": "금", "Silver": "은", "Other Precious Metals & Mining": "귀금속 광업",
+              "Other Industrial Metals & Mining": "산업금속 광업",
+              "Specialty Chemicals": "정밀화학", "Chemicals": "화학",
+              "Agricultural Inputs": "농업 자재", "Building Materials": "건축소재",
+              "Paper & Paper Products": "제지", "Lumber & Wood Production": "목재",
+              "Coking Coal": "코크스탄",
+              # 통신·미디어
+              "Telecom Services": "통신 서비스", "Entertainment": "엔터테인먼트",
+              "Broadcasting": "방송", "Advertising Agencies": "광고",
+              "Publishing": "출판", "Internet Content & Information": "인터넷 콘텐츠",
+              "Electronic Components & Devices": "전자부품",
+              # 부동산·유틸리티
+              "Real Estate—Development": "부동산 개발", "Real Estate Services": "부동산 서비스",
+              "Real Estate—Diversified": "부동산(종합)",
+              "REIT—Diversified": "리츠(종합)", "REIT—Industrial": "리츠(산업)",
+              "REIT—Office": "리츠(오피스)", "REIT—Residential": "리츠(주거)",
+              "REIT—Retail": "리츠(리테일)", "REIT—Healthcare Facilities": "리츠(의료)",
+              "REIT—Hotel & Motel": "리츠(호텔)", "REIT—Specialty": "리츠(특수)",
+              "REIT—Mortgage": "리츠(모기지)",
+              "Utilities—Regulated Electric": "전력", "Utilities—Regulated Gas": "가스",
+              "Utilities—Regulated Water": "수도", "Utilities—Diversified": "유틸리티(종합)",
+              "Utilities—Independent Power Producers": "민자발전",
+              "Utilities—Renewable": "신재생 발전",
+              "Shell Companies": "지주·기타", "Aluminum & Metals": "금속",
+          }
+
+          l1 = l2 = pd.DataFrame()
+          TOP30 = []
+          if len(res):
+              res["rs_pct"] = (res["rs_raw"].rank(pct=True) * 98 + 1).round(0) \
+                  if res["rs_raw"].notna().any() else np.nan
+              res = res.drop_duplicates("ticker").reset_index(drop=True)
+
+              # ---------------- 2단계: 사상최고가 확인 ----------------
+              # 갭으로 매물대를 넘었어도, 사상최고가에서 한참 아래면 위쪽에 매물이 더 있다.
+              log(f"사상최고가 확인 {len(res)}종목")
+              ath = {}
+              set_deadline(max(2, left() * 0.4))
+              try:
+                  tks = res["ticker"].tolist()
+                  for i in range(0, len(tks), 50):
+                      part = tks[i:i + 50]
+                      dd = None
+                      for _a in range(3):
+                          try:
+                              dd = yf.download(part, period="max", group_by="ticker",
+                                               auto_adjust=False, threads=True,
+                                               progress=False)
+                              if dd is not None and len(dd):
+                                  break
+                          except Exception:
+                              dd = None
+                          time.sleep(6)
+                      if dd is None or len(dd) == 0:
+                          continue
+                      time.sleep(1.5)
+                      for tk in part:
+                          try:
+                              x = dd[tk] if isinstance(dd.columns, pd.MultiIndex) else dd
+                              x = x.dropna(how="all").rename(columns=str.lower)
+                              if len(x) >= 60:
+                                  ath[tk] = float(x["high"].max())
+                          except Exception:
+                              pass
+              except Deadline:
+                  cut = True
+                  print("  [강제마감] 사상최고가 조회 중단", flush=True)
+              finally:
+                  clear_deadline()
+
+              def _ath(r):
+                  hi = ath.get(r["ticker"])
+                  if not hi or hi <= 0:
+                      return pd.Series([np.nan, np.nan])
+                  return pd.Series([round(hi, 2), round((1 - r["last"] / hi) * 100, 1)])
+
+              res[["ath", "ath_off"]] = res.apply(_ath, axis=1)
+
+              # ---------------- 갭 완성도 점수 ----------------
+              def gapscore(r):
+                  sc = 0.0
+                  g = r["gap_pct"]                     # 갭 크기: 5~15%가 이상적
+                  sc += 22 if 5 <= g <= 15 else (16 if 3 <= g <= 25 else 7)
+                  v = r["vol_mult"]                    # 거래량: 클수록 좋다
+                  sc += 24 if v >= 4 else (19 if v >= 3 else (14 if v >= 2 else 6))
+                  rp = r["range_pct"]                  # 횡보가 좁을수록 매물대가 얇다
+                  sc += 18 if rp <= 15 else (13 if rp <= 22 else 7)
+                  w = r["consol_weeks"]                # 횡보 기간: 길수록 매물 소화
+                  sc += 14 if w >= 12 else (10 if w >= 8 else 5)
+                  sc += 12 if r["held"] else 0         # 갭을 지키고 있는가
+                  a = r["ath_off"]
+                  if pd.isna(a):
+                      sc += 3
+                  else:
+                      sc += 10 if a <= 5 else (7 if a <= 15 else 2)
+                  return round(sc, 1)
+
+              res["gapscore"] = res.apply(gapscore, axis=1)
+              res["fresh"] = (res["days"] <= 3) & res["held"]
+              res["actionable"] = res["held"] & (res["from_gap"] <= 10)
+
+              res = res.sort_values(["fresh", "gapscore"],
+                                    ascending=[False, False]).reset_index(drop=True)
+
+              # ---------------- 엄격 조건 상위 목록 ----------------
+              cond = (res["held"]
+                      & (res["days"] <= P["top_days"])
+                      & (res["vol_mult"] >= P["top_vol"])
+                      & (res["range_pct"] <= P["top_range"])
+                      & (res["consol_weeks"] >= P["top_weeks_min"])
+                      & (res["from_gap"] <= P["top_from_gap"])
+                      & res["ath_off"].notna()
+                      & (res["ath_off"] <= P["top_ath_off"] * 100)
+                      & res["rs_pct"].notna()
+                      & (res["rs_pct"] >= P["top_rs_min"]))
+              near = res[cond]
+              TOP30 = near.nlargest(30, "gapscore")["ticker"].tolist()
+              if len(TOP30):
+                  sel = near.nlargest(30, "gapscore")
+                  log(f"상위 목록 {len(TOP30)}개 선정 (조건 통과 {len(near)} / "
+                      f"전체 {len(res)}, 점수 {sel['gapscore'].min():.0f}~"
+                      f"{sel['gapscore'].max():.0f})")
+              else:
+                  log(f"엄격 조건을 통과한 종목이 없습니다 (전체 {len(res)}개)")
+
+              globals()["COND_STAT"] = [
+                  ("갭 유지 중", int(res["held"].sum())),
+                  (f"갭 {P['top_days']}일 이내", int((res["days"] <= P["top_days"]).sum())),
+                  (f"거래량 {P['top_vol']}배 이상",
+                   int((res["vol_mult"] >= P["top_vol"]).sum())),
+                  (f"횡보 폭 {P['top_range']}% 이내",
+                   int((res["range_pct"] <= P["top_range"]).sum())),
+                  (f"횡보 {P['top_weeks_min']}주 이상",
+                   int((res["consol_weeks"] >= P["top_weeks_min"]).sum())),
+                  (f"갭 이후 +{P['top_from_gap']}% 이내",
+                   int((res["from_gap"] <= P["top_from_gap"]).sum())),
+                  ("사상최고가 −10% 이내",
+                   int((res["ath_off"] <= P["top_ath_off"] * 100).sum())),
+                  (f"상대강도 {P['top_rs_min']} 이상",
+                   int((res["rs_pct"] >= P["top_rs_min"]).sum())),
+              ]
+
+              l1 = res[["name", "ticker", "market", "last", "gap_date", "days",
+                        "gap_pct", "wall", "over_wall", "consol_weeks", "range_pct",
+                        "vol_mult", "held", "from_gap", "ath", "ath_off",
+                        "off52", "newly", "rs_pct", "gapscore", "fresh", "actionable"]]
+              l1.columns = ["종목명", "코드", "시장", "현재가", "갭일", "갭후일수",
+                            "갭크기%", "돌파한매물대", "매물대대비%", "횡보주", "횡보폭%",
+                            "거래량배수", "갭유지", "갭이후%", "사상최고가",
+                            "최고가대비%", "52주고점대비%", "신규상장", "상대강도",
+                            "갭점수", "막돌파", "매수권"]
+              l1.to_csv("results/list1_gap.csv", index=False, encoding="utf-8-sig")
+
+              def row(d, keys):
+                  if d is None or len(d) == 0:
+                      return None
+                  ix = {str(x).strip().lower(): x for x in d.index}
+                  for k in keys:
+                      if ix.get(k.lower()) is not None:
+                          s = d.loc[ix[k.lower()]]
+                          return pd.to_numeric(s.iloc[0] if isinstance(s, pd.DataFrame) else s,
+                                               errors="coerce")
+                  return None
+
+              cand = res.head(TOPF)
+              log(f"캔슬림 확인 {len(cand)}종목 (남은 {left():.0f}분)")
+              gs = []
+              set_deadline(max(2, left() - 3))     # 보고서 작성 시간 3분은 남긴다
+              try:
+                for _, r in cand.iterrows():
+                    if left() < 2:
+                        cut = True
+                        break
+                    f, px = {}, None
+                    try:
+                        t = yf.Ticker(r["ticker"])
+                        px = t.history(period="2y", auto_adjust=False).rename(columns=str.lower)
+                        q, a = t.quarterly_income_stmt, t.income_stmt
+                        qe = row(q, ["Diluted EPS", "Basic EPS"])
+                        if qe is None:
+                            qe = row(q, ["Net Income"])
+                        f["qe"] = qe
+                        f["qr"] = row(q, ["Total Revenue", "Operating Revenue"])
+                        ae = row(a, ["Diluted EPS", "Basic EPS"])
+                        if ae is None:
+                            ae = row(a, ["Net Income"])
+                        f["ae"] = ae
+                        i = t.info or {}
+                        f["roe"] = i.get("returnOnEquity")
+                        f["shares"] = i.get("floatShares") or i.get("sharesOutstanding")
+                        f["inst"] = i.get("heldPercentInstitutions")
+                        SEC[r["ticker"]] = i.get("sector") or ""
+                        IND[r["ticker"]] = i.get("industry") or ""
+                        DESC[r["ticker"]] = i.get("longBusinessSummary") or ""
+                        MCAP[r["ticker"]] = i.get("marketCap")
+                        ROE_[r["ticker"]] = i.get("returnOnEquity")
+                        EPSG[r["ticker"]] = yoy(f.get("qe"))
+                    except Exception:
+                        pass
+                    g = canslim(f, px, r.get("rs_pct"), REG.get(r["market"], ""))
+                    g.update(name=r["name"], ticker=r["ticker"], market=r["market"],
+                             last=r["last"], gap_pct=r["gap_pct"],
+                             vol_mult=r["vol_mult"])
+                    gs.append(g)
+              except Deadline:
+                  cut = True
+                  print("  [강제마감] 재무 조회 중단", flush=True)
+              finally:
+                  clear_deadline()
+
+              if gs:
+                  gdf = pd.DataFrame(gs)
+                  gdf.to_csv("results/list2_canslim_full.csv", index=False, encoding="utf-8-sig")
+                  l2 = gdf[gdf["verdict"] == "canslim"]
+          log(f"캔슬림 통과 {len(l2)}건")
+
+          # 상위 30개 중 아직 정보가 없는 종목만 채운다
+          if len(l1):
+              star_tks = l1[l1["막돌파"] == True]["코드"].tolist()  # noqa: E712
+              miss = [t for t in list(dict.fromkeys(TOP30 + star_tks)) if t not in SEC]
+              if miss:
+                  log(f"상위 30개 중 정보 미확보 {len(miss)}종목 추가 조회")
+                  set_deadline(max(1, left() - 2))
+                  try:
+                      for t in miss:
+                          try:
+                              tk_ = yf.Ticker(t)
+                              i = tk_.info or {}
+                              SEC[t] = i.get("sector") or ""
+                              IND[t] = i.get("industry") or ""
+                              DESC[t] = i.get("longBusinessSummary") or ""
+                              MCAP[t] = i.get("marketCap")
+                              ROE_[t] = i.get("returnOnEquity")
+                              try:
+                                  q_ = tk_.quarterly_income_stmt
+                                  qe_ = row(q_, ["Diluted EPS", "Basic EPS"])
+                                  if qe_ is None:
+                                      qe_ = row(q_, ["Net Income"])
+                                  EPSG[t] = yoy(qe_)
+                              except Exception:
+                                  pass
+                          except Exception:
+                              pass
+                  except Deadline:
+                      print("  [강제마감] 추가 조회 중단", flush=True)
+                  finally:
+                      clear_deadline()
+
+          # 섹터는 캔슬림 단계에서 수집되므로 그 뒤에 붙인다
+          if len(l1):
+              l1 = l1.copy()
+              l1["섹터"] = l1["코드"].map(
+                  lambda t: SECTOR_KR.get(SEC.get(t, ""), SEC.get(t, "") or "미분류"))
+
+              def one_line(t):
+                  """한글 업종명으로 한 줄 소개. 없으면 섹터명."""
+                  ind = (IND.get(t) or "").strip()
+                  if ind:
+                      kr = INDUSTRY_KR.get(ind)
+                      if kr:
+                          return kr
+                      # 사전에 없으면 대시 기준으로 앞부분만 재시도
+                      base = ind.split("—")[0].split("-")[0].strip()
+                      kr = INDUSTRY_KR.get(base)
+                      if kr:
+                          return kr
+                  sec = SECTOR_KR.get(SEC.get(t, ""), "")
+                  return sec or "-"
+
+              l1["소개"] = l1["코드"].map(one_line)
+
+              CUR = {"KR": ("원", 1e12, "조", 1e8, "억"),
+                     "US": ("달러", 1e12, "조", 1e8, "억"),
+                     "JP": ("엔", 1e12, "조", 1e8, "억"),
+                     "CN": ("위안", 1e12, "조", 1e8, "억"),
+                     "HK": ("HKD", 1e12, "조", 1e8, "억")}
+
+              def mcap_txt(v, mkt):
+                  """시가총액을 조/억 단위 한글로."""
+                  if not v or v <= 0:
+                      return ""
+                  unit, t1, n1, t2, n2 = CUR.get(mkt, CUR["US"])
+                  if v >= t1:
+                      return f"시총 {v/t1:,.1f}{n1}{unit}"
+                  if v >= t2:
+                      return f"시총 {v/t2:,.0f}{n2}{unit}"
+                  return f"시총 {v/1e6:,.0f}백만{unit}"
+
+              def size_label(v, mkt):
+                  if not v or v <= 0:
+                      return ""
+                  # 통화 차이를 고려해 대략적인 구간
+                  big = {"KR": 1e13, "US": 5e10, "JP": 5e12,
+                         "CN": 1e11, "HK": 1e11}.get(mkt, 5e10)
+                  if v >= big * 4:
+                      return "초대형주"
+                  if v >= big:
+                      return "대형주"
+                  if v >= big / 10:
+                      return "중형주"
+                  return "소형주"
+
+              def point(r):
+                  """
+                  한 줄 투자포인트. 실제 데이터로만 구성한다.
+                  (시장 점유율·업계 순위 같은 확인 안 되는 표현은 쓰지 않는다)
+                  """
+                  t, mkt = r["코드"], r["시장"]
+                  seg = []
+
+                  ind = r["소개"]
+                  sz = size_label(MCAP.get(t), mkt)
+                  seg.append(f"{ind} {sz}".strip() if sz else ind)
+
+                  m = mcap_txt(MCAP.get(t), mkt)
+                  if m:
+                      seg.append(m)
+
+                  g = EPSG.get(t)
+                  if g is not None and g != 999.0:
+                      if g >= 0.25:
+                          seg.append(f"분기이익 +{g*100:.0f}% 급증")
+                      elif g > 0:
+                          seg.append(f"분기이익 +{g*100:.0f}%")
+                      else:
+                          seg.append(f"분기이익 {g*100:.0f}%")
+
+                  ro = ROE_.get(t)
+                  if ro is not None and ro > 0:
+                      seg.append(f"ROE {ro*100:.0f}%")
+
+                  rs_ = r.get("상대강도")
+                  if pd.notna(rs_):
+                      if rs_ >= 90:
+                          seg.append(f"주가강도 상위 {100-rs_:.0f}% (최상위권)")
+                      elif rs_ >= 80:
+                          seg.append(f"주가강도 상위 {100-rs_:.0f}%")
+                      else:
+                          seg.append(f"주가강도 {rs_:.0f}점")
+
+                  return " · ".join([x for x in seg if x]) or "-"
+
+              l1["투자포인트"] = l1.apply(point, axis=1)
+              cols = list(l1.columns)
+              cols.insert(3, cols.pop(cols.index("섹터")))
+              cols.append(cols.pop(cols.index("소개")))
+              l1 = l1[cols]
+              l1.to_csv("results/list1_gap.csv", index=False, encoding="utf-8-sig")
+              l1[l1["막돌파"] == True].to_csv("results/list0_fresh_gap.csv",  # noqa: E712
+                                             index=False, encoding="utf-8-sig")
+              n_sec = int((l1["섹터"] != "미분류").sum())
+              log(f"섹터 확인 {n_sec}/{len(l1)}종목")
+
+
+          # --- 보고서 ----------------------------------------------------------------
+          def tbl(d, cols, hdr, n=80):
+              if d is None or len(d) == 0:
+                  return "_해당 없음_\n"
+              o = "| " + " | ".join(hdr) + " |\n|" + "|".join(["---"] * len(hdr)) + "|\n"
+              for _, r in d[cols].head(n).iterrows():
+                  o += "| " + " | ".join(
+                      f"{r[c]:,.2f}" if isinstance(r[c], float) else str(r[c])
+                      for c in cols) + " |\n"
+              return o
+
+
+          stamp = time.strftime("%Y-%m-%d (%a)", time.gmtime(time.time() + 32400))
+          md = [f"# 갭 돌파 리스트 — {stamp}\n", "## 시장 상황\n", "| 나라 | 국면 |", "|---|---|"]
+          for nm, code, *_ in MKT:
+              if code in REG:
+                  md.append(f"| {nm} | {LBL[REG[code]]} |")
+          md += ["", "## 스캔 결과\n", "| 나라 | 조회 | 발견 | 비고 |", "|---|---|---|---|"]
+          for a, b, c, d in stats:
+              md.append(f"| {a} | {b:,} | {c} | {d} |")
+
+          fr = l1[l1["막돌파"] == True] if len(l1) else pd.DataFrame()  # noqa: E712
+          NAME = {"KR": "한국", "US": "미국", "JP": "일본", "CN": "중국", "HK": "홍콩"}
+          LC = ["종목명", "코드", "섹터", "현재가", "갭크기%", "거래량배수",
+                "횡보주", "최고가대비%"]
+          TC = ["종목명", "코드", "섹터", "갭점수", "현재가", "갭크기%",
+                "거래량배수", "횡보주", "투자포인트"]
+          FC = ["종목명", "코드", "섹터", "현재가", "갭일", "갭후일수", "갭크기%",
+                "거래량배수", "돌파한매물대", "최고가대비%", "투자포인트"]
+
+
+          def by_country(df, cols, open_first=True, n=60):
+              """나라별로 접었다 펼칠 수 있게 만든다 (제목을 누르면 열림)"""
+              if df is None or len(df) == 0:
+                  return ["_해당 없음_\n"]
+              out, first = [], True
+              for code in ["KR", "US", "JP", "CN", "HK"]:
+                  g = df[df["시장"] == code] if "시장" in df.columns else df.iloc[0:0]
+                  if len(g) == 0:
+                      continue
+                  op = " open" if (first and open_first) else ""
+                  out.append(f"<details{op}>")
+                  out.append(f"<summary><b>{NAME[code]} &nbsp; {len(g)}개</b></summary>\n")
+                  out.append(tbl(g, cols, cols, n=n))
+                  out.append("</details>\n")
+                  first = False
+              return out or ["_해당 없음_\n"]
+
+
+          def sector_note(df):
+              """나라별로 어느 섹터가 몰려 있는지 한 줄로 요약"""
+              out = []
+              if df is None or len(df) == 0 or "섹터" not in df.columns:
+                  return ["_섹터 정보 없음_\n"]
+              for code in ["KR", "US", "JP", "CN", "HK"]:
+                  g = df[df["시장"] == code]
+                  if len(g) == 0:
+                      continue
+                  vc = g["섹터"].value_counts()
+                  vc = vc[vc.index != "미분류"]
+                  if len(vc) == 0:
+                      out.append(f"- **{NAME[code]}** ({len(g)}개) — 섹터 미확인")
+                      continue
+                  tot = int(vc.sum())
+                  top = [f"{k} {int(v)}개({v/tot*100:.0f}%)" for k, v in vc.head(3).items()]
+                  lead = vc.index[0]
+                  share = vc.iloc[0] / tot
+                  if share >= 0.5:
+                      tail = f" → **{lead}** 쏠림"
+                  elif share >= 0.3:
+                      tail = f" → {lead} 우위"
+                  else:
+                      tail = " → 특정 섹터 쏠림 없음"
+                  out.append(f"- **{NAME[code]}** ({len(g)}개) — " + ", ".join(top) + tail)
+              return out
+
+
+          md += ["", "\n## 섹터 흐름\n",
+                 "_아래 ★ 종목들이 어느 섹터에 몰려 있는지입니다._\n"]
+          md += sector_note(fr if len(fr) else
+                            (l1[l1["매수권"] == True] if len(l1) else l1))  # noqa: E712
+          md.append("")
+
+          md += ["", f"\n## ★ 방금 갭 돌파한 종목 {len(fr)}개\n",
+                 "_컵앤핸들 완성 후 5거래일 이내 · 거래량 동반 · "
+                 "손잡이 고점이 사상최고가 -10% 이내 · "
+                 "현재가가 사상최고가 +5% 이내. 상장 2년 미만 제외._\n",
+                 "_나라 이름을 누르면 펼쳐집니다._\n"]
+          md += by_country(fr.sort_values("갭후일수") if len(fr) else fr, FC)
+
+          act = l1[l1["매수권"] == True] if len(l1) else pd.DataFrame()  # noqa: E712
+          top = (l1[l1["코드"].isin(TOP30)].sort_values("갭점수", ascending=False)
+                 if len(l1) else l1)
+          md += ["", f"\n## 갭 돌파 상위 {len(top)}개\n",
+                 f"_전체 {len(l1)}개 중 아래 조건을 모두 통과한 종목입니다._\n",
+                 "_갭 5일 이내 · 거래량 2.5배 이상 · 횡보 폭 22% 이내 · "
+                 "횡보 8주 이상 · 갭 이후 +10% 이내 · 사상최고가 −10% 이내 · "
+                 "상대강도 80 이상 · 갭 유지 중._\n",
+                 f"_전체 목록은 results/list1_gap.csv 에 있습니다._\n"]
+          if len(top) == 0 and globals().get("COND_STAT"):
+              md.append("\n조건별 통과 수 (전체 " + str(len(l1)) + "개 기준)\n")
+              md.append("| 조건 | 통과 |")
+              md.append("|---|---|")
+              for cn_, cv_ in COND_STAT:
+                  md.append(f"| {cn_} | {cv_}개 |")
+              md.append("")
+          md += by_country(top, TC, open_first=True)
+
+          md.append(f"\n## 리스트 2 — 캔슬림 통과 {len(l2)}개\n")
+          if len(l2):
+              t2 = l2.rename(columns={"name": "종목명", "ticker": "코드",
+                                      "market": "시장", "last": "현재가",
+                                      "gap_pct": "갭크기%"})
+              md += by_country(t2, ["종목명", "코드", "현재가", "갭크기%",
+                                    "C", "A", "N", "S", "L", "I", "M"],
+                               open_first=False)
+          else:
+              md.append("_통과 종목 없음._ 캔슬림 전 항목 통과는 원래 드뭅니다. "
+                        "하락장이면 M 규칙 때문에 전부 탈락합니다.\n")
+
+          if cut:
+              md.append("\n> ⚠ 시간 제한으로 일부만 처리했습니다.\n")
+          md.append(f"\n---\n소요 {(time.time()-T0)/60:.0f}분 · 전체 목록은 results 폴더\n")
+          md.append("\n※ 후보 목록이며 매수 추천이 아닙니다. 판단과 책임은 본인에게 있습니다.\n")
+          # ---------------- 인쇄용 HTML (PDF 변환용) ----------------
+          NUMC = {"현재가", "갭크기%", "거래량배수", "횡보주", "횡보폭%", "갭점수",
+                  "갭후일수", "돌파한매물대", "매물대대비%", "갭이후%",
+                  "최고가대비%", "52주고점대비%", "사상최고가", "상대강도"}
+
+
+          def h_tbl(df, cols, n=200):
+              if df is None or len(df) == 0:
+                  return '<p class="none">해당 없음</p>'
+              o = ['<table><thead><tr>']
+              for c in cols:
+                  cl = ' class="n"' if c in NUMC else ''
+                  o.append('<th' + cl + '>' + str(c) + '</th>')
+              o.append('</tr></thead><tbody>')
+              for k, (_, r) in enumerate(df[cols].head(n).iterrows()):
+                  o.append('<tr class="' + ("od" if k % 2 else "") + '">')
+                  for c in cols:
+                      v = r[c]
+                      if c in ("C", "A", "N", "S", "L", "I", "M"):
+                          cls = {"pass": "ok", "fail": "no"}.get(str(v), "un")
+                          mark = {"pass": c, "fail": "✗"}.get(str(v), "·")
+                          o.append('<td class="cs ' + cls + '">' + mark + '</td>')
+                          continue
+                      cls = []
+                      if c in NUMC:
+                          cls.append("n")
+                      if c == "종목명":
+                          cls.append("nm")
+                      if c == "투자포인트":
+                          cls.append("pt")
+                      if c == "갭점수":
+                          cls.append("sc")
+                      if c in ("매물대대비%", "갭이후%") and isinstance(v, float):
+                          cls.append("up" if v >= 0 else "dn")
+                      if isinstance(v, float):
+                          v = ("{:,.1f}".format(v) if abs(v) < 10000
+                               else "{:,.0f}".format(v))
+                      cl = (' class="' + " ".join(cls) + '"') if cls else ''
+                      o.append('<td' + cl + '>' + str(v) + '</td>')
+                  o.append('</tr>')
+              o.append('</tbody></table>')
+              return "".join(o)
+
+
+          def h_country(df, cols):
+              if df is None or len(df) == 0:
+                  return '<p class="none">해당 없음</p>'
+              out = []
+              for code in ["KR", "US", "JP", "CN", "HK"]:
+                  g = df[df["시장"] == code] if "시장" in df.columns else df.iloc[0:0]
+                  if len(g) == 0:
+                      continue
+                  out.append('<div class="cty"><span class="cn">' + NAME[code]
+                             + '</span><span class="cb">' + str(len(g)) + '개</span></div>')
+                  out.append(h_tbl(g, [c for c in cols if c != "시장"]))
+              return "".join(out) or '<p class="none">해당 없음</p>'
+
+
+          CSS = (
+           "@page{size:A4 landscape;margin:10mm 9mm 12mm 9mm}"
+           "*{box-sizing:border-box}"
+           'body{font-family:"Noto Sans CJK KR",sans-serif;font-size:8.6pt;'
+           "color:#22201d;margin:0}"
+           # 머리말
+           ".top{background:#12355b;color:#fff;padding:11px 14px;margin-bottom:13px}"
+           ".top h1{font-size:19pt;margin:0;display:inline-block;letter-spacing:-.5px}"
+           ".top .dt{font-size:10pt;opacity:.72;margin-left:12px}"
+           # 요약 카드
+           ".kpi{display:table;width:100%;border-spacing:7px 0;margin-bottom:11px}"
+           ".kpi .k{display:table-cell;width:25%;border:1px solid #e0dcd5;"
+           "border-top:4px solid #12355b;padding:9px 12px;background:#fbfaf8}"
+           ".kpi .k.s{border-top-color:#c8890f}.kpi .k.c{border-top-color:#1a7a4f}"
+           ".kpi .k.g{border-top-color:#9a958c}"
+           ".kpi .k b{display:block;font-size:18pt;line-height:1.1;color:#12355b}"
+           ".kpi .k.s b{color:#a8730c}.kpi .k.c b{color:#166b45}.kpi .k.g b{color:#6b675f}"
+           ".kpi .k span{font-size:8.2pt;color:#6b675f}"
+           # 시장 배지
+           ".mk{display:table;width:100%;border-spacing:7px 0;margin-bottom:13px}"
+           ".mk .m{display:table-cell;padding:7px 9px;text-align:center;"
+           "border:1px solid #e0dcd5;background:#f7f5f2}"
+           ".mk .m b{display:block;font-size:10pt}"
+           ".mk .m.up{background:#eef7f2;border-color:#bfe0cf}.mk .m.up b{color:#166b45}"
+           ".mk .m.dn{background:#fdf2f1;border-color:#f0cdc9}.mk .m.dn b{color:#a5322a}"
+           ".mk .m.nt b{color:#6b675f}"
+           ".mk .m span{font-size:8.4pt;color:#6b675f}"
+           # 섹션 제목
+           "h2{font-size:12.5pt;margin:19px 0 7px;padding:6px 11px;background:#eef1f6;"
+           "border-left:5px solid #12355b;color:#12355b}"
+           "h2.star{background:#fdf6e8;border-left-color:#c8890f;color:#8a6009}"
+           "h2.cs{background:#eef7f2;border-left-color:#1a7a4f;color:#166b45}"
+           "h2 .sm{font-size:8.6pt;font-weight:400;opacity:.7;margin-left:8px}"
+           ".note{font-size:8.2pt;color:#6b675f;margin:0 0 9px;padding-left:3px}"
+           # 국가 구분
+           ".cty{margin:12px 0 4px}"
+           ".cty .cn{font-size:11pt;font-weight:700;color:#12355b}"
+           ".cty .cb{font-size:8pt;background:#12355b;color:#fff;padding:1.5px 8px;"
+           "margin-left:8px;border-radius:2px}"
+           # 표
+           "table{width:100%;border-collapse:collapse;font-size:8.2pt;margin-bottom:9px}"
+           "th,td{border-bottom:1px solid #ebe8e2;padding:4.2px 7px;text-align:left}"
+           "thead th{background:#12355b;color:#fff;font-weight:600;font-size:8pt;"
+           "border-bottom:none}"
+           "th.n,td.n{text-align:right;white-space:nowrap}"
+           "tbody tr.od td{background:#fbfaf8}"
+           "td.nm{font-weight:600}"
+           "td.pt{color:#4a463f;font-size:7.9pt}"
+           "td.sc{font-weight:700;color:#12355b}"
+           "td.up{color:#166b45}td.dn{color:#a5322a}"
+           "td.cs{text-align:center;font-weight:700;width:17px}"
+           "td.cs.ok{background:#e4f2ea;color:#12603c}"
+           "td.cs.no{background:#fbe9e7;color:#9c2f27}"
+           "td.cs.un{color:#bdb9b2}"
+           # 기타
+           ".sec{border:1px solid #e0dcd5;border-left:5px solid #12355b;"
+           "background:#fbfaf8;padding:9px 13px;margin-bottom:12px;font-size:8.6pt}"
+           ".sec div{margin-bottom:3px}"
+           '.none{color:#8d8880;font-style:italic;font-size:8.4pt;padding:4px 2px}'
+           ".ft{border-top:2px solid #12355b;margin-top:15px;padding-top:7px;"
+           "font-size:7.6pt;color:#8d8880}"
+          )
+
+          H = ['<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><style>'
+               + CSS + '</style></head><body>'
+               + '<div class="top"><h1>갭 돌파 리스트</h1>'
+               + '<span class="dt">' + stamp + '</span></div>']
+
+          H.append('<div class="kpi">')
+          H.append('<div class="k s"><b>' + str(len(fr)) + '</b><span>★ 방금 갭 돌파</span></div>')
+          H.append('<div class="k"><b>' + str(len(top)) + '</b><span>갭 돌파 상위</span></div>')
+          H.append('<div class="k c"><b>' + str(len(l2)) + '</b><span>캔슬림 통과</span></div>')
+          H.append('<div class="k g"><b>' + str(len(l1)) + '</b><span>갭 발생 전체</span></div>')
+          H.append('</div>')
+
+          H.append('<div class="mk">')
+          for nm_, code_, *_ in MKT:
+              if code_ in REG:
+                  st_ = REG[code_]
+                  cl = "up" if st_ == "uptrend" else ("dn" if st_ == "downtrend" else "nt")
+                  H.append('<div class="m ' + cl + '"><b>' + LBL[st_]
+                           + '</b><span>' + nm_ + '</span></div>')
+          H.append('</div>')
+
+          H.append('<h2>스캔 결과</h2>')
+          H.append('<table><thead><tr><th>나라</th><th class="n">조회</th>'
+                   '<th class="n">발견</th><th>비고</th></tr></thead><tbody>')
+          for k_, (a_, b_, c_, d_) in enumerate(stats):
+              H.append('<tr class="' + ("od" if k_ % 2 else "") + '"><td>' + str(a_)
+                       + '</td><td class="n">' + format(b_, ",") + '</td><td class="n">'
+                       + str(c_) + '</td><td>' + str(d_) + '</td></tr>')
+          H.append('</tbody></table>')
+
+          H.append('<h2>섹터 흐름</h2><div class="sec">')
+          for line in sector_note(fr if len(fr) else act):
+              H.append('<div>' + line.lstrip("- ").replace("**", "") + '</div>')
+          H.append('</div>')
+
+          H.append('<h2 class="star">★ 방금 갭 돌파한 종목 <span class="sm">' + str(len(fr))
+                   + '개</span></h2>')
+          H.append('<p class="note">횡보 구간을 갭으로 뛰어넘고 3거래일 이내 · '
+                   '거래량 동반 · 갭을 지키고 있는 종목</p>')
+          H.append(h_country(fr.sort_values("갭후일수") if len(fr) else fr, FC))
+
+          H.append('<h2>갭 돌파 상위 ' + str(len(top)) + '개 <span class="sm">전체 '
+                   + str(len(l1)) + '개 중</span></h2>')
+          H.append('<p class="note">갭 5일 이내 · 거래량 2.5배↑ · 횡보 폭 22% 이내 · '
+                   '횡보 8주↑ · 갭 이후 +10% 이내 · 사상최고가 −10% 이내 · '
+                   '상대강도 80↑ · 갭 유지 중 — 모두 통과</p>')
+          if len(top) == 0 and globals().get("COND_STAT"):
+              H.append('<table><thead><tr><th>조건</th><th class="n">통과</th></tr>'
+                       '</thead><tbody>')
+              for k_, (cn_, cv_) in enumerate(COND_STAT):
+                  H.append('<tr class="' + ("od" if k_ % 2 else "") + '"><td>' + cn_
+                           + '</td><td class="n">' + str(cv_) + '개</td></tr>')
+              H.append('</tbody></table>')
+          H.append(h_country(top, TC))
+
+          H.append('<h2 class="cs">캔슬림 통과 <span class="sm">' + str(len(l2)) + '개</span></h2>')
+          if len(l2):
+              t2h = l2.rename(columns={"name": "종목명", "ticker": "코드",
+                                       "market": "시장", "last": "현재가",
+                                       "gap_pct": "갭크기%"})
+              H.append('<p class="note">대문자 = 통과, ✗ = 미달, · = 데이터 없음</p>')
+              H.append(h_country(t2h, ["종목명", "코드", "시장", "현재가", "갭크기%",
+                                       "C", "A", "N", "S", "L", "I", "M"]))
+          else:
+              H.append('<p class="none">통과 종목 없음 — 캔슬림 전 항목 통과는 드뭅니다. '
+                       '하락장이면 M 규칙 때문에 전부 탈락합니다.</p>')
+
+          H.append('<div class="ft">횡보 후 갭 돌파 자동 스캔 결과. '
+                   '후보 목록이며 매수 추천이 아닙니다. '
+                   '판단과 책임은 투자자 본인에게 있습니다.</div></body></html>')
+
+          open("report.html", "w", encoding="utf-8").write("".join(H))
+
+          # ---------------- 이슈 하단 PDF 링크 ----------------
+          REPO = os.environ.get("GITHUB_REPOSITORY", "")
+          DATE = time.strftime("%Y-%m-%d", time.gmtime(time.time() + 32400))
+          PDFN = f"report_{DATE}.pdf"
+          if REPO:
+              view = f"https://github.com/{REPO}/blob/main/results/{PDFN}"
+              save = f"https://github.com/{REPO}/raw/main/results/{PDFN}"
+              md.append("\n---\n")
+              md.append(f"### 📄 [PDF로 보기]({view})  ·  [⬇️ PDF 저장]({save})\n")
+              md.append("_'PDF로 보기'는 화면에서 바로 열리고, "
+                        "'PDF 저장'은 파일로 내려받습니다._\n")
+          open("pdfname.txt", "w").write(PDFN)
+
+          body = "\n".join(md)
+          if len(body) > 60000:
+              body = body[:59000] + "\n\n> 내용이 길어 잘렸습니다. 전체는 results 폴더의 csv 참고.\n"
+          open("summary.md", "w", encoding="utf-8").write(body)
+          log(f"보고서 완료 ({len(body):,}자)")
+          PYTHON_EOF
+
+      - name: 스캔
+        timeout-minutes: 115
+        env:
+          TIME_BUDGET_MIN: "80"
+          TOP_FUND: "250"
+        run: python scan.py
+
+      - name: PDF 만들기
+        if: always()
+        run: |
+          if [ -f report.html ]; then
+            NAME=$(cat pdfname.txt 2>/dev/null || echo report.pdf)
+            mkdir -p results
+            wkhtmltopdf --enable-local-file-access --print-media-type -q \
+              --page-size A4 --orientation Landscape \
+              --footer-right "[page] / [topage]" --footer-font-size 7 \
+              --footer-font-name "Noto Sans CJK KR" --footer-spacing 4 \
+              report.html "results/$NAME" || echo "PDF 변환 실패"
+          fi
+
+      - name: 파일 저장
+        if: always()
+        run: |
+          git config user.name github-actions
+          git config user.email actions@github.com
+          git add -A results summary.md 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "결과 $(TZ=Asia/Seoul date '+%m/%d')"
+          git push || true
+
+      - name: 결과 올리기
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f summary.md ]; then
+            gh issue create --title "갭 돌파 $(TZ=Asia/Seoul date '+%m/%d %H:%M')" --body-file summary.md --repo "${{ github.repository }}"
+          else
+            gh issue create --title "갭 돌파 $(TZ=Asia/Seoul date '+%m/%d') - 실패" --body "스캔이 보고서를 만들지 못했습니다." --repo "${{ github.repository }}"
+          fi
