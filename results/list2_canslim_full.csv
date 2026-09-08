@@ -1,11 +1,13 @@
 ﻿C,A,N,S,L,I,M,n_pass,verdict,name,ticker,market,last,gap_pct,vol_mult
-fail,pass,pass,unknown,fail,unknown,pass,3,fail,Novartis AG Common Stock,NVS,US,159.99,6.2,2.38
-fail,fail,pass,unknown,pass,unknown,pass,3,fail,Principal Financial Group Inc - Common,PFG,US,116.68,3.6,2.66
-unknown,fail,fail,unknown,fail,unknown,fail,0,fail,中国出版,601949.SS,CN,6.41,4.8,10.13
-unknown,unknown,fail,unknown,fail,unknown,fail,0,fail,云南旅游,002059.SZ,CN,6.07,10.1,2.52
-unknown,fail,pass,unknown,pass,unknown,fail,2,fail,千金药业,600479.SS,CN,13.86,8.9,17.82
-pass,pass,pass,unknown,fail,unknown,pass,4,fail,"Urban Outfitters, Inc. - Common Stock",URBN,US,80.97,3.2,3.29
-unknown,fail,fail,unknown,fail,unknown,fail,0,fail,时代出版,600551.SS,CN,8.15,5.8,20.49
-unknown,fail,fail,unknown,fail,unknown,fail,0,fail,小方制药,603207.SS,CN,25.41,6.3,5.78
-unknown,unknown,pass,unknown,fail,unknown,pass,2,fail,The J.M. Smucker Company Common Stock,SJM,US,126.08,6.8,2.06
-unknown,pass,fail,unknown,fail,unknown,fail,1,fail,赛轮轮胎,601058.SS,CN,14.35,4.4,2.08
+unknown,unknown,pass,unknown,pass,unknown,pass,3,partial,Roivant Sciences Ltd. - Common Shares,ROIV,US,41.48,13.8,3.94
+fail,fail,pass,unknown,fail,unknown,pass,2,fail,Principal Financial Group Inc - Common,PFG,US,115.04,3.6,2.66
+unknown,fail,pass,unknown,fail,unknown,fail,1,fail,中国出版,601949.SS,CN,7.05,4.8,10.13
+unknown,unknown,fail,unknown,fail,unknown,fail,0,fail,云南旅游,002059.SZ,CN,6.28,10.1,2.52
+fail,fail,pass,unknown,pass,unknown,pass,3,fail,ZIM Integrated Shipping Services Ltd. ,ZIM,US,30.08,5.1,2.9
+unknown,fail,pass,unknown,pass,unknown,fail,2,fail,千金药业,600479.SS,CN,14.81,8.9,17.82
+pass,pass,pass,unknown,fail,unknown,pass,4,fail,"Urban Outfitters, Inc. - Common Stock",URBN,US,79.43,3.2,3.29
+fail,pass,fail,unknown,fail,unknown,pass,2,fail,Novartis AG Common Stock,NVS,US,137.7,6.2,2.38
+unknown,fail,fail,unknown,fail,unknown,fail,0,fail,时代出版,600551.SS,CN,8.25,5.8,20.49
+unknown,fail,fail,unknown,fail,unknown,fail,0,fail,小方制药,603207.SS,CN,26.04,6.3,5.78
+unknown,unknown,pass,unknown,fail,unknown,pass,2,fail,The J.M. Smucker Company Common Stock,SJM,US,124.66,6.8,2.06
+unknown,pass,fail,unknown,fail,unknown,fail,1,fail,赛轮轮胎,601058.SS,CN,14.59,4.4,2.08
