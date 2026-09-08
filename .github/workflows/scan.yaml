@@ -1,8 +1,8 @@
-name: 컵앤핸들 매일 스캔
+name: 갭 돌파 매일 스캔
 
 on:
   schedule:
-    - cron: "0 18 * * 0-4"        # KST 03:00 월~금 (UTC 기준)
+    - cron: "30 21 * * 0-4"        # KST 06:30 월~금 (UTC 기준)
   workflow_dispatch:          # Actions 탭 → Run workflow 로 수동 실행
 
 permissions:
@@ -10,7 +10,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: cup-scan
+  group: gap-scan
   cancel-in-progress: false
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 130
     env:
-      SCAN_MODE: cup
+      SCAN_MODE: gap
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -1449,7 +1449,7 @@ jobs:
         if: always()
         run: |
           if [ -f report.html ]; then
-            NAME=$(cat pdfname.txt 2>/dev/null || echo report_cup.pdf)
+            NAME=$(cat pdfname.txt 2>/dev/null || echo report_gap.pdf)
             mkdir -p results
             wkhtmltopdf --enable-local-file-access --print-media-type -q \
               --page-size A4 --orientation Landscape \
@@ -1464,7 +1464,7 @@ jobs:
           git config user.name github-actions
           git config user.email actions@github.com
           git add -A results cache 2>/dev/null || true
-          git diff --staged --quiet || git commit -m "컵앤핸들 결과 $(TZ=Asia/Seoul date '+%m/%d')"
+          git diff --staged --quiet || git commit -m "갭 돌파 결과 $(TZ=Asia/Seoul date '+%m/%d')"
           git pull --rebase origin "$(git rev-parse --abbrev-ref HEAD)" || true
           git push || true
 
@@ -1473,7 +1473,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TITLE=$(cat issue_title.txt 2>/dev/null || echo "컵앤핸들")
+          TITLE=$(cat issue_title.txt 2>/dev/null || echo "갭 돌파")
           if [ -f summary.md ]; then
             gh issue create --title "$TITLE $(TZ=Asia/Seoul date '+%m/%d %H:%M')" --body-file summary.md --repo "${{ github.repository }}"
           else
