@@ -16,7 +16,7 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 130
+    timeout-minutes: 150
     env:
       SCAN_MODE: gap
     steps:
@@ -27,7 +27,7 @@ jobs:
 
       - name: 네트워크 점검 (러너 IP가 막혔는지 로그에 남긴다)
         run: |
-          for u in https://www.jpx.co.jp/ https://www.hkex.com.hk/ https://www.nasdaqtrader.com/ https://query2.finance.yahoo.com/ ; do
+          for u in https://www.jpx.co.jp/ https://kind.krx.co.kr/ https://finance.naver.com/ https://www.hkex.com.hk/ https://query2.finance.yahoo.com/ ; do
             code=$(curl -s -o /dev/null -w "%{http_code}" -A "Mozilla/5.0" --max-time 20 "$u" || echo ERR)
             echo "$u → HTTP $code"
           done
@@ -398,8 +398,41 @@ jobs:
               return o
 
 
+          def _kr_naver():
+              """네이버 금융 시가총액 페이지. KRX 서버를 안 거쳐서 해외 IP 차단과 무관하다."""
+              import re, requests
+              o, seen = [], set()
+              for sosok, sfx in [(0, ".KS"), (1, ".KQ")]:
+                  for page in range(1, 80):
+                      u = f"https://finance.naver.com/sise/sise_market_sum.naver?sosok={sosok}&page={page}"
+                      r = requests.get(u, timeout=30, headers={"User-Agent": UA,
+                                                               "Referer": "https://finance.naver.com/"})
+                      r.raise_for_status()
+                      html = r.content.decode("euc-kr", "ignore")
+                      found = re.findall(r'href="/item/main\.naver\?code=(\d{6})"[^>]*>([^<]+)</a>', html)
+                      if not found:
+                          break
+                      new = 0
+                      for c, nm in found:
+                          if c not in seen:
+                              seen.add(c)
+                              o.append((c + sfx, nm.strip()[:20]))
+                              new += 1
+                      if new == 0:
+                          break
+                      time.sleep(0.3)
+              return o
+
+
           def u_kr():
               errs = []
+              try:                                         # 0) 네이버 (KRX 아님 — 해외에서도 열림)
+                  o = _kr_naver()
+                  if len(o) > 1000:
+                      return o
+                  errs.append(f"naver:{len(o)}개")
+              except Exception as e:
+                  errs.append(f"naver:{type(e).__name__}")
               try:                                         # 1) FinanceDataReader
                   import FinanceDataReader as fdr
                   df = fdr.StockListing("KRX")
@@ -597,11 +630,12 @@ jobs:
 
 
           # (이름, 코드, 목록함수, 대체생성, 벤치마크, 최저가, 최저 50일 평균거래대금)
-          MKT = [("홍콩", "HK", u_hk, None, "^HSI", 3, 2e7),
-                 ("한국", "KR", u_kr, None, "^KS11", 5000, 2e9),
+          # 순서: 목록이 안정적인 시장 먼저, 코드 대역으로 떨어질 수 있는(느린) 시장은 뒤로
+          MKT = [("한국", "KR", u_kr, None, "^KS11", 5000, 2e9),
+                 ("미국", "US", u_us, None, "^GSPC", 5, 5e6),
+                 ("홍콩", "HK", u_hk, None, "^HSI", 3, 2e7),
                  ("일본", "JP", u_jp, enum_jp, "^N225", 500, 2e8),
-                 ("중국", "CN", u_cn, enum_cn, "000001.SS", 5, 5e7),
-                 ("미국", "US", u_us, None, "^GSPC", 5, 5e6)]
+                 ("중국", "CN", u_cn, enum_cn, "000001.SS", 5, 5e7)]
           LBL = {"uptrend": "상승장", "downtrend": "하락장", "neutral": "횡보장", "": "판정불가"}
           NAME = {"KR": "한국", "US": "미국", "JP": "일본", "CN": "중국", "HK": "홍콩"}
 
@@ -653,7 +687,8 @@ jobs:
                       try:
                           i = tk.info or {}
                           if i.get("sector") or i.get("marketCap"):
-                              d.update(sector=i.get("sector") or "", industry=i.get("industry") or "",
+                              d.update(name=i.get("shortName") or i.get("longName") or d.get("name"),
+                                       sector=i.get("sector") or "", industry=i.get("industry") or "",
                                        mcap=i.get("marketCap") or d.get("mcap"),
                                        shares=i.get("floatShares") or i.get("sharesOutstanding") or d.get("shares"),
                                        roe=i.get("returnOnEquity"), inst=i.get("heldPercentInstitutions"))
@@ -709,6 +744,7 @@ jobs:
                           continue
                       log(f"  {len(uni):,}종목 ({unote})")
                       f0, nd = len(rows), 0
+                      alive = []                           # 실제로 시세가 온 종목 (코드대역일 때 캐시용)
                       CH = 100
                       for ci in range(math.ceil(len(uni) / CH)):
                           if left() < 3:
@@ -738,12 +774,21 @@ jobs:
                                   if len(d) < 150:
                                       nd += 1
                                       continue
+                                  alive.append((tk, meta[tk]))
                                   for m in detect(d, tk, code, minp, minvol):
                                       m["name"] = meta[tk]
                                       rows.append(m)
                               except Exception:
                                   nd += 1
                           time.sleep(1.0)
+                      if unote.startswith("코드대역") and len(alive) >= 500 and not cut:
+                          try:                             # 살아있는 종목만 저장 → 다음엔 8,700개 대신 ~3,900개
+                              json.dump({"ts": time.time(), "u": alive},
+                                        open(f"cache/universe_{code}.json", "w", encoding="utf-8"),
+                                        ensure_ascii=False)
+                              log(f"  실존 종목 {len(alive):,}개 캐시 저장 (다음 실행부터 사용)")
+                          except Exception:
+                              traceback.print_exc()
                       note = unote
                       if cut:
                           note += " · 시간부족 부분처리"
@@ -964,6 +1009,10 @@ jobs:
                       f"실패 {INFO_HIT['fail']}")
 
                   # ---------- 섹터·투자포인트 ----------
+                  import re as _re
+                  l1["종목명"] = l1.apply(
+                      lambda r: (INFO.get(r["코드"], {}).get("name") or r["종목명"])[:28]
+                      if _re.match(r"^(TSE|SH|SZ)\d+$", str(r["종목명"])) else r["종목명"], axis=1)
                   l1["섹터"] = l1["코드"].map(
                       lambda t: SECTOR_KR.get(INFO.get(t, {}).get("sector", ""),
                                               INFO.get(t, {}).get("sector", "") or "미분류"))
@@ -1439,9 +1488,9 @@ jobs:
           PYTHON_EOF
 
       - name: 스캔
-        timeout-minutes: 115
+        timeout-minutes: 135
         env:
-          TIME_BUDGET_MIN: "95"
+          TIME_BUDGET_MIN: "110"
           TOP_FUND: "150"
         run: python scan.py
 
