@@ -1,4 +1,4 @@
-name: 갭 돌파 매일 스캔
+name: 갭 돌파 스캔 v2
 
 on:
   schedule:
@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   issues: write
+  actions: write              # 옛 워크플로(scan.yml)를 끄기 위해 필요
 
 concurrency:
   group: gap-scan
@@ -21,6 +22,19 @@ jobs:
       SCAN_MODE: gap
     steps:
       - uses: actions/checkout@v4
+
+      - name: 옛 워크플로(scan.yml) 자동 비활성화
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ME=$(basename "${GITHUB_WORKFLOW_REF%%@*}")
+          echo "지금 실행 중인 파일: $ME"
+          if [ "$ME" != "scan.yml" ]; then
+            gh workflow disable scan.yml --repo "${{ github.repository }}" \
+              && echo "옛 scan.yml 비활성화 완료 — 더는 스케줄로 돌지 않습니다" \
+              || echo "scan.yml 없음 또는 이미 비활성"
+          fi
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -88,12 +102,12 @@ jobs:
           log = lambda m: print(f"[{(time.time()-T0)/60:5.1f}분] {m}", flush=True)
 
           # --- 컵앤핸들 파라미터 (오닐) -------------------------------------------------
-          P = dict(up=0.30, lb=250, dmin=35, dmax=325, depth_lo=.12, depth_hi=.50,
-                   rim=.08, rnd=.18, rnd_bars=10, dec_lo=.20, dec_hi=.78, dec_days=15,
-                   h_lo=5, h_hi=45, hd_lo=.03, hd_hi=.15, hvol=.90, buf=.001,
-                   piv52_max=0.15, ath_piv_max=0.10, ath_over_max=0.05, list1_ath_max=0.25,
-                   top_ath_max=0.10, top_rs_min=80, top_depth_max=33, top_weeks_max=30,
-                   top_hvol_max=0.85, top_dist=5.0, min_bars_2y=400)
+          P = dict(up=0.25, lb=250, dmin=30, dmax=350, depth_lo=.10, depth_hi=.55,
+                   rim=.10, rnd=.15, rnd_bars=8, dec_lo=.18, dec_hi=.80, dec_days=12,
+                   h_lo=4, h_hi=50, hd_lo=.025, hd_hi=.18, hvol=1.00, buf=.001,
+                   piv52_max=0.25, ath_piv_max=0.15, ath_over_max=0.08, list1_ath_max=0.35,
+                   top_ath_max=0.15, top_rs_min=70, top_depth_max=40, top_weeks_max=40,
+                   top_hvol_max=1.00, top_dist=8.0, min_bars_2y=400)
 
           # --- 갭 돌파 파라미터 -----------------------------------------------------------
           #  핵심 논리: "최근 몇 달간 형성된 가격 범위(성곽)를 갭으로 뛰어넘는다"
@@ -101,18 +115,18 @@ jobs:
           #    2) 갭일 시가가 그 박스 고점 위에서 열려야 하며 (1차 목록)
           #    3) 갭일 저가까지 박스 고점 위면 '완전 돌파' (상위 목록 필수)
           #    4) 지금도 박스 고점 위에 있어야 '갭 유지'
-          G = dict(gap_min=0.03,        # 시가가 전일 종가 대비 +3% 이상
-                   vol_min=2.0,         # 갭일 거래량 / 직전 50일 평균 (1차)
-                   top_vol=2.5,         # 상위 목록
-                   box_min=40,          # 횡보 최소 8주 (거래일)
+          G = dict(gap_min=0.02,        # 시가가 전일 종가 대비 +2% 이상
+                   vol_min=1.5,         # 갭일 거래량 / 직전 50일 평균 (1차)
+                   top_vol=2.0,         # 상위 목록
+                   box_min=30,          # 횡보 최소 6주 (거래일)
                    box_max=200,         # 최대 40주
-                   box_range=0.35,      # 1차: 박스 고점/저점 폭 35% 이내
-                   top_box_range=0.22,  # 상위: 22% 이내
-                   recent=60,           # 갭이 최근 60거래일 안이면 1차 목록에 넣는다
-                   star_days=5,         # ★: 갭 후 5거래일 이내
-                   ext_max=0.10,        # 상위: 갭 시가 대비 +10% 이내 (추격 방지)
-                   ath_max=0.10,        # 사상최고가 -10% 이내
-                   rs_min=80, min_bars_2y=400)
+                   box_range=0.45,      # 1차: 박스 고점/저점 폭 45% 이내
+                   top_box_range=0.30,  # 상위: 30% 이내
+                   recent=90,           # 갭이 최근 90거래일 안이면 1차 목록에 넣는다
+                   star_days=7,         # ★: 갭 후 7거래일 이내
+                   ext_max=0.15,        # 상위: 갭 시가 대비 +15% 이내 (추격 방지)
+                   ath_max=0.20,        # 사상최고가 -20% 이내
+                   rs_min=70, min_bars_2y=400)
 
 
           def peaks(h, w=10):
@@ -369,13 +383,29 @@ jobs:
 
 
           def _get(url, timeout=60, referer=None):
-              import requests
-              hd = {"User-Agent": UA, "Accept": "*/*", "Accept-Language": "ja,en;q=0.8,ko;q=0.6"}
+              """1) requests + 브라우저 헤더  2) 막히면 curl_cffi 로 크롬 TLS 지문까지 위장"""
+              hd = {"User-Agent": UA, "Accept": "*/*", "Accept-Language": "ja,ko,en;q=0.8"}
               if referer:
                   hd["Referer"] = referer
-              r = requests.get(url, timeout=timeout, headers=hd)
-              r.raise_for_status()
-              return r.content
+              last = None
+              try:
+                  import requests
+                  r = requests.get(url, timeout=timeout, headers=hd)
+                  if r.status_code == 200 and len(r.content) > 500:
+                      return r.content
+                  last = RuntimeError(f"HTTP {r.status_code}")
+              except Exception as e:
+                  last = e
+              try:
+                  from curl_cffi import requests as creq
+                  r = creq.get(url, timeout=timeout, headers=hd, impersonate="chrome")
+                  if r.status_code == 200 and len(r.content) > 500:
+                      print(f"    (curl_cffi 우회 성공: {url[:60]})", flush=True)
+                      return r.content
+                  last = RuntimeError(f"HTTP {r.status_code} (curl_cffi)")
+              except Exception as e:
+                  last = e
+              raise last
 
 
           def u_hk():
@@ -400,15 +430,12 @@ jobs:
 
           def _kr_naver():
               """네이버 금융 시가총액 페이지. KRX 서버를 안 거쳐서 해외 IP 차단과 무관하다."""
-              import re, requests
+              import re
               o, seen = [], set()
               for sosok, sfx in [(0, ".KS"), (1, ".KQ")]:
                   for page in range(1, 80):
                       u = f"https://finance.naver.com/sise/sise_market_sum.naver?sosok={sosok}&page={page}"
-                      r = requests.get(u, timeout=30, headers={"User-Agent": UA,
-                                                               "Referer": "https://finance.naver.com/"})
-                      r.raise_for_status()
-                      html = r.content.decode("euc-kr", "ignore")
+                      html = _get(u, timeout=30, referer="https://finance.naver.com/").decode("euc-kr", "ignore")
                       found = re.findall(r'href="/item/main\.naver\?code=(\d{6})"[^>]*>([^<]+)</a>', html)
                       if not found:
                           break
@@ -640,6 +667,20 @@ jobs:
           NAME = {"KR": "한국", "US": "미국", "JP": "일본", "CN": "중국", "HK": "홍콩"}
 
 
+          def _rate_limited(msg):
+              m = (msg or "").lower()
+              return "too many" in m or "rate" in m or "429" in m
+
+
+          def _yf_rate_limited():
+              """yfinance 가 마지막 download 에서 남긴 종목별 오류 메시지를 훑어 차단 여부를 본다."""
+              try:
+                  errs = getattr(yf.shared, "_ERRORS", {}) or {}
+                  return any(_rate_limited(str(v)) for v in errs.values())
+              except Exception:
+                  return False
+
+
           def regime(sym):
               for _a in range(3):
                   try:
@@ -745,7 +786,7 @@ jobs:
                       log(f"  {len(uni):,}종목 ({unote})")
                       f0, nd = len(rows), 0
                       alive = []                           # 실제로 시세가 온 종목 (코드대역일 때 캐시용)
-                      CH = 100
+                      CH, rl_hits, blocked = 60, 0, False
                       for ci in range(math.ceil(len(uni) / CH)):
                           if left() < 3:
                               cut = True
@@ -753,19 +794,31 @@ jobs:
                           part = uni[ci * CH:(ci + 1) * CH]
                           syms, meta = [p[0] for p in part], dict(part)
                           data = None
-                          for _a in range(3):
+                          for _a in range(4):
                               try:
                                   data = yf.download(syms, period="2y", group_by="ticker",
                                                      auto_adjust=False, threads=True, progress=False)
-                                  if data is not None and len(data):
-                                      break
-                              except Exception:
+                              except Exception as e:
                                   data = None
-                              if _a < 2:
-                                  time.sleep(8 * (_a + 1))
+                                  if _rate_limited(str(e)):
+                                      rl_hits += 1
+                              if data is not None and len(data):
+                                  break
+                              # 빈 결과: 전부 없는 종목(코드대역)인지, 야후가 막은 건지 구분한다
+                              if _yf_rate_limited():
+                                  rl_hits += 1
+                                  wait = min(60 * (_a + 1), 240)
+                                  log(f"  야후 요청 제한 감지 — {wait}초 대기 (누적 {rl_hits})")
+                                  time.sleep(wait)
+                              else:
+                                  break                    # 진짜 데이터 없음 — 재시도 의미 없음
+                          if rl_hits >= 12:
+                              blocked = True
+                              log(f"  야후 차단 지속 — {nm} 남은 종목 생략")
+                              break
                           if data is None or len(data) == 0:
                               nd += len(syms)
-                              time.sleep(3)
+                              time.sleep(2)
                               continue
                           for tk in syms:
                               try:
@@ -790,6 +843,8 @@ jobs:
                           except Exception:
                               traceback.print_exc()
                       note = unote
+                      if blocked:
+                          note += " · 야후 차단으로 일부만"
                       if cut:
                           note += " · 시간부족 부분처리"
                       elif not unote.startswith("코드대역") and nd > len(uni) * .3:
@@ -877,11 +932,11 @@ jobs:
                       res = res.sort_values(["fresh", "actionable", "ath_piv_off"],
                                             ascending=[False, False, True]).reset_index(drop=True)
                       D = P["top_dist"]
-                      conds = [("매수 기준가 ±5%", (res["dist"] >= -D) & (res["dist"] <= D)),
-                               ("사상최고가 −10% 이내", res["ath_piv_off"] <= P["top_ath_max"] * 100),
-                               ("상대강도 80 이상", res["rs_pct"] >= P["top_rs_min"]),
-                               ("컵 깊이 33% 이하", res["depth"] <= P["top_depth_max"]),
-                               ("베이스 30주 이하", res["weeks"] <= P["top_weeks_max"]),
+                      conds = [(f"매수 기준가 ±{D:.0f}%", (res["dist"] >= -D) & (res["dist"] <= D)),
+                               (f"사상최고가 −{P['top_ath_max']*100:.0f}% 이내", res["ath_piv_off"] <= P["top_ath_max"] * 100),
+                               (f"상대강도 {P['top_rs_min']} 이상", res["rs_pct"] >= P["top_rs_min"]),
+                               (f"컵 깊이 {P['top_depth_max']}% 이하", res["depth"] <= P["top_depth_max"]),
+                               (f"베이스 {P['top_weeks_max']}주 이하", res["weeks"] <= P["top_weeks_max"]),
                                ("손잡이 거래량 감소", res["hvol"] <= P["top_hvol_max"])]
                       l1 = res[["name", "ticker", "market", "last", "pivot", "dist", "depth", "weeks",
                                 "hdepth", "actionable", "broke", "fresh", "days_bo", "bo_date", "bo_vol",
@@ -916,14 +971,14 @@ jobs:
                       res["score"] = res.apply(score, axis=1)
                       res = res.sort_values(["fresh", "days", "score"],
                                             ascending=[False, True, False]).reset_index(drop=True)
-                      conds = [("갭 5일 이내", res["days"] <= G["star_days"]),
-                               ("거래량 2.5배 이상", res["volx"] >= G["top_vol"]),
-                               ("횡보 8주 이상", res["box_weeks"] >= G["box_min"] / 5),
-                               ("횡보 폭 22% 이내", res["box_range"] <= G["top_box_range"] * 100),
+                      conds = [(f"갭 {G['star_days']}일 이내", res["days"] <= G["star_days"]),
+                               (f"거래량 {G['top_vol']:.1f}배 이상", res["volx"] >= G["top_vol"]),
+                               (f"횡보 {G['box_min']//5}주 이상", res["box_weeks"] >= G["box_min"] / 5),
+                               (f"횡보 폭 {G['top_box_range']*100:.0f}% 이내", res["box_range"] <= G["top_box_range"] * 100),
                                ("완전 돌파(갭 저가 > 박스 고점)", res["clean"]),
-                               ("갭 시가 대비 +10% 이내", res["ext"] <= G["ext_max"] * 100),
-                               ("사상최고가 −10% 이내", res["ath_over"] >= -G["ath_max"] * 100),
-                               ("상대강도 80 이상", res["rs_pct"] >= G["rs_min"]),
+                               (f"갭 시가 대비 +{G['ext_max']*100:.0f}% 이내", res["ext"] <= G["ext_max"] * 100),
+                               (f"사상최고가 −{G['ath_max']*100:.0f}% 이내", res["ath_over"] >= -G["ath_max"] * 100),
+                               (f"상대강도 {G['rs_min']} 이상", res["rs_pct"] >= G["rs_min"]),
                                ("갭 유지 중(박스 고점 위)", res["held"])]
                       l1 = res[["name", "ticker", "market", "last", "gap_date", "days", "gap", "volx",
                                 "gap_open", "gap_low", "box_hi", "box_lo", "box_weeks", "box_range",
@@ -1095,12 +1150,13 @@ jobs:
                   title="컵앤핸들 리스트", issue="컵앤핸들",
                   kpi=["★ 사상최고가 돌파", "컵 모양 상위", "캔슬림 통과", "컵 모양 전체"],
                   star_h="★ 사상최고가 돌파 종목",
-                  star_desc="컵앤핸들 완성 후 5거래일 이내 · 거래량 동반 · 손잡이 고점이 사상최고가 −10% 이내 · "
-                            "현재가가 사상최고가 +5% 이내 · 상장 2년 미만 제외",
+                  star_desc=f"컵앤핸들 완성 후 5거래일 이내 · 거래량 동반 · 손잡이 고점이 사상최고가 −{P['ath_piv_max']*100:.0f}% 이내 · "
+                            f"현재가가 사상최고가 +{P['ath_over_max']*100:.0f}% 이내 · 상장 2년 미만 제외",
                   star_sort="돌파후일수",
-                  top_h="컵 모양 상위", top_sub="매수 기준가 ±5%",
-                  top_desc="매수 기준가 ±5% · 사상최고가 −10% 이내 · 상대강도 80 이상 · 컵 깊이 33% 이하 · "
-                           "베이스 30주 이하 · 손잡이 거래량 감소",
+                  top_h="컵 모양 상위", top_sub=f"매수 기준가 ±{P['top_dist']:.0f}%",
+                  top_desc=f"매수 기준가 ±{P['top_dist']:.0f}% · 사상최고가 −{P['top_ath_max']*100:.0f}% 이내 · "
+                           f"상대강도 {P['top_rs_min']} 이상 · 컵 깊이 {P['top_depth_max']}% 이하 · "
+                           f"베이스 {P['top_weeks_max']}주 이하 · 손잡이 거래량 감소",
                   list1="results/list1_cup.csv", list0="results/list0_ath_breakout.csv",
                   FC=["종목명", "코드", "섹터", "현재가", "매수기준가", "돌파일", "돌파후일수", "돌파거래량",
                       "현재가_최고가대비%", "투자포인트"],
@@ -1111,13 +1167,15 @@ jobs:
                   title="갭 돌파 리스트", issue="갭 돌파",
                   kpi=["★ 방금 갭 돌파", "갭 돌파 상위", "캔슬림 통과", "갭 후보 전체"],
                   star_h="★ 방금 갭 돌파한 종목",
-                  star_desc="갭 5거래일 이내 · 갭일 거래량 2배 이상 · 8주 이상 횡보 박스의 고점 위에서 시가 형성 · "
-                            "지금도 박스 고점 위 · 사상최고가 −10% 이내 · 상장 2년 미만 제외",
+                  star_desc=f"갭 {G['star_days']}거래일 이내 · 갭일 거래량 {G['vol_min']:.1f}배 이상 · "
+                            f"{G['box_min']//5}주 이상 횡보 박스의 고점 위에서 시가 형성 · 지금도 박스 고점 위 · "
+                            f"사상최고가 −{G['ath_max']*100:.0f}% 이내 · 상장 2년 미만 제외",
                   star_sort="갭후일수",
                   top_h="갭 돌파 상위", top_sub="성곽을 넘은 갭",
-                  top_desc="갭 5일 이내 · 거래량 2.5배 이상 · 횡보 8주 이상 · 횡보 폭 22% 이내 · "
-                           "완전 돌파(갭 저가가 박스 고점 위) · 갭 시가 대비 +10% 이내 · 사상최고가 −10% 이내 · "
-                           "상대강도 80 이상 · 갭 유지 중",
+                  top_desc=f"갭 {G['star_days']}일 이내 · 거래량 {G['top_vol']:.1f}배 이상 · 횡보 {G['box_min']//5}주 이상 · "
+                           f"횡보 폭 {G['top_box_range']*100:.0f}% 이내 · 완전 돌파(갭 저가가 박스 고점 위) · "
+                           f"갭 시가 대비 +{G['ext_max']*100:.0f}% 이내 · 사상최고가 −{G['ath_max']*100:.0f}% 이내 · "
+                           f"상대강도 {G['rs_min']} 이상 · 갭 유지 중",
                   list1="results/list1_gap.csv", list0="results/list0_gap_fresh.csv",
                   FC=["종목명", "코드", "섹터", "현재가", "갭일", "갭후일수", "갭크기%", "거래량배수", "박스고점",
                       "갭시가", "완전돌파", "최고가대비%", "투자포인트"],
@@ -1297,7 +1355,7 @@ jobs:
                   return (a, f"{b:,}", ("—" if c is None else str(c)), d)
 
               # ---------------- 마크다운 (이슈 본문) ----------------
-              md = [f"# {CFG['title']} — {stamp}\n"]
+              md = [f"# {CFG['title']} — {stamp}  `v2`\n"]
               if failed:
                   md.append("> ⚠ **" + ", ".join(sorted(failed)) + "** 목록을 못 받아 스캔에서 빠졌습니다. "
                             "'발견 0'이 아니라 '조회 못함'입니다.\n")
@@ -1333,7 +1391,8 @@ jobs:
                             "하락장이면 M 규칙 때문에 전부 탈락합니다.\n")
               if cut:
                   md.append("\n> ⚠ 시간 제한으로 일부만 처리했습니다.\n")
-              md.append(f"\n---\n소요 {(time.time()-T0)/60:.0f}분 · 전체 목록은 results 폴더\n")
+              wf = os.path.basename(os.environ.get("GITHUB_WORKFLOW_REF", "").split("@")[0]) or "로컬"
+              md.append(f"\n---\n소요 {(time.time()-T0)/60:.0f}분 · 코드 v2 ({wf}) · 전체 목록은 results 폴더\n")
               md.append("\n※ 후보 목록이며 매수 추천이 아닙니다. 판단과 책임은 본인에게 있습니다.\n")
 
               # ---------------- HTML (PDF) ----------------
@@ -1513,7 +1572,7 @@ jobs:
           git config user.name github-actions
           git config user.email actions@github.com
           git add -A results cache 2>/dev/null || true
-          git diff --staged --quiet || git commit -m "갭 돌파 결과 $(TZ=Asia/Seoul date '+%m/%d')"
+          git diff --staged --quiet || git commit -m "갭 돌파 v2 결과 $(TZ=Asia/Seoul date '+%m/%d')"
           git pull --rebase origin "$(git rev-parse --abbrev-ref HEAD)" || true
           git push || true
 
@@ -1524,7 +1583,7 @@ jobs:
         run: |
           TITLE=$(cat issue_title.txt 2>/dev/null || echo "갭 돌파")
           if [ -f summary.md ]; then
-            gh issue create --title "$TITLE $(TZ=Asia/Seoul date '+%m/%d %H:%M')" --body-file summary.md --repo "${{ github.repository }}"
+            gh issue create --title "$TITLE v2 $(TZ=Asia/Seoul date '+%m/%d %H:%M')" --body-file summary.md --repo "${{ github.repository }}"
           else
-            gh issue create --title "$TITLE $(TZ=Asia/Seoul date '+%m/%d') - 실패" --body "스캔이 보고서를 만들지 못했습니다. Actions 로그를 확인하세요." --repo "${{ github.repository }}"
+            gh issue create --title "$TITLE v2 $(TZ=Asia/Seoul date '+%m/%d') - 실패" --body "스캔이 보고서를 만들지 못했습니다. Actions 로그를 확인하세요." --repo "${{ github.repository }}"
           fi
