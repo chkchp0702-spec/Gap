@@ -1,7 +1,6 @@
 ﻿C,A,N,S,L,I,M,n_pass,verdict,name,ticker,market,last,gap_pct,vol_mult
-unknown,unknown,pass,unknown,pass,unknown,pass,3,partial,Roivant Sciences Ltd. - Common Shares,ROIV,US,40.82,13.8,3.95
-fail,fail,fail,unknown,fail,unknown,pass,1,fail,샘표식품,248170.KS,KR,25700.0,15.7,89.39
-unknown,unknown,fail,unknown,fail,unknown,fail,0,fail,云南旅游,002059.SZ,CN,5.68,10.1,2.52
-fail,pass,fail,unknown,fail,unknown,pass,2,fail,Novartis AG Common Stock,NVS,US,137.16,6.2,2.38
-fail,fail,pass,unknown,fail,unknown,pass,2,fail,Principal Financial Group Inc - Common,PFG,US,116.17,3.6,2.66
-fail,fail,pass,unknown,pass,unknown,pass,3,fail,ZIM Integrated Shipping Services Ltd. ,ZIM,US,29.57,5.1,2.94
+unknown,fail,pass,pass,pass,pass,fail,4,fail,Roivant Sciences Ltd. - Common Shares,ROIV,US,39.5,13.8,3.95
+fail,pass,fail,pass,fail,pass,fail,3,fail,Novartis AG Common Stock,NVS,US,138.62,6.2,2.38
+fail,fail,pass,pass,fail,pass,fail,3,fail,Principal Financial Group Inc - Common,PFG,US,118.37,3.6,2.66
+fail,fail,fail,pass,fail,fail,fail,1,fail,샘표식품,248170.KS,KR,23150.0,15.7,89.39
+fail,fail,pass,pass,fail,pass,fail,3,fail,ZIM Integrated Shipping Services Ltd. ,ZIM,US,29.57,5.1,2.94
