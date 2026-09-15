@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04      # latest 대신 고정 — OS가 바뀌어 깨지는 일 방지
     timeout-minutes: 150
     env:
       SCAN_MODE: gap
@@ -63,15 +63,16 @@ jobs:
             echo "$u → HTTP $code"
           done
 
-      - name: PDF 도구 설치
+      - name: PDF 도구 설치 (실패해도 스캔은 계속)
         if: steps.guard.outputs.skip != 'true'
+        continue-on-error: true
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq wkhtmltopdf fonts-noto-cjk
 
       - name: 파이썬 패키지
         if: steps.guard.outputs.skip != 'true'
-        run: pip install -q -U numpy pandas yfinance curl_cffi pykrx finance-datareader akshare openpyxl xlrd lxml html5lib requests
+        run: pip install -q "numpy<2.3" "pandas>=2.2,<3" "yfinance>=0.2.60" curl_cffi pykrx finance-datareader akshare openpyxl xlrd lxml html5lib requests
 
       - name: 스크립트 생성
         if: steps.guard.outputs.skip != 'true'
@@ -1613,7 +1614,10 @@ jobs:
         env:
           TIME_BUDGET_MIN: "110"
           TOP_FUND: "150"
-        run: python scan.py
+        run: |
+          set -o pipefail
+          python -c "import sys, numpy, pandas, yfinance; print('python', sys.version.split()[0], '| numpy', numpy.__version__, '| pandas', pandas.__version__, '| yfinance', yfinance.__version__)" | tee scan.log
+          python scan.py 2>&1 | tee -a scan.log
 
       - name: PDF 만들기
         if: always() && steps.guard.outputs.skip != 'true'
@@ -1647,5 +1651,14 @@ jobs:
           if [ -f summary.md ]; then
             gh issue create --title "$TITLE v2 $(TZ=Asia/Seoul date '+%m/%d %H:%M')" --body-file summary.md --repo "${{ github.repository }}"
           else
-            gh issue create --title "$TITLE v2 $(TZ=Asia/Seoul date '+%m/%d') - 실패" --body "스캔이 보고서를 만들지 못했습니다. Actions 로그를 확인하세요." --repo "${{ github.repository }}"
+            {
+              echo "스캔이 보고서를 만들지 못했습니다. 아래는 실행 로그 마지막 부분입니다."
+              echo
+              echo '```'
+              tail -n 60 scan.log 2>/dev/null || echo "(scan.log 없음 — 스캔 단계 전에 실패. Actions 탭에서 빨간 X 단계를 확인)"
+              echo '```'
+              echo
+              echo "실행 파일: $(basename "${GITHUB_WORKFLOW_REF%%@*}") · run: ${{ github.run_id }}"
+            } > fail.md
+            gh issue create --title "$TITLE v2 $(TZ=Asia/Seoul date '+%m/%d') - 실패" --body-file fail.md --repo "${{ github.repository }}"
           fi
