@@ -1416,6 +1416,8 @@ jobs:
               def scan_row(a, b, c, d):
                   return (a, f"{b:,}", ("—" if c is None else str(c)), d)
 
+              n_new = int(fr["NEW"].sum()) if len(fr) and "NEW" in fr.columns else 0
+
               # ---------------- 마크다운 (이슈 본문) ----------------
               md = [f"# {CFG['title']} — {stamp}  `v2`\n"]
               if failed:
@@ -1431,7 +1433,8 @@ jobs:
                   md.append(f"| {a} | {b} | {c} | {d} |")
               md += ["", "\n## 섹터 흐름\n", "_아래 ★ 종목들이 어느 섹터에 몰려 있는지입니다._\n"]
               md += sector_note(fr if len(fr) else act)
-              md += ["", f"\n## {CFG['star_h']} {len(fr)}개\n", f"_{CFG['star_desc']}._\n",
+              md += ["", f"\n## {CFG['star_h']} {len(fr)}개 (오늘 신규 \U0001F195 {n_new}개)\n",
+                     f"_{CFG['star_desc']}._\n",
                      "_나라 이름을 누르면 펼쳐집니다._\n"]
               md += by_country(fr.sort_values(CFG["star_sort"]) if len(fr) else fr, FC)
               md += ["", f"\n## {CFG['top_h']} {len(top)}개\n",
@@ -1463,7 +1466,7 @@ jobs:
                    + '<span class="dt">' + stamp + '</span></div>']
               k = CFG["kpi"]
               H.append('<div class="kpi">'
-                       + f'<div class="k s"><b>{len(fr)}</b><span>{k[0]}</span></div>'
+                       + f'<div class="k s"><b>{len(fr)}</b><span>{k[0]} · 신규 {n_new}</span></div>'
                        + f'<div class="k"><b>{len(top)}</b><span>{k[1]}</span></div>'
                        + f'<div class="k c"><b>{len(l2)}</b><span>{k[2]}</span></div>'
                        + f'<div class="k g"><b>{len(l1)}</b><span>{k[3]}</span></div></div>')
