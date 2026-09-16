@@ -5,6 +5,11 @@ on:
     - cron: "17 21 * * 0-4"        # KST 06:17 월~금
     - cron: "52 22 * * 0-4"        # KST 07:52 월~금 (예비)
   workflow_dispatch:          # Actions 탭 → Run workflow 로 수동 실행
+    inputs:
+      check:
+        description: "왜 안 잡혔나 — 종목코드 (쉼표 구분, 예: 064290, 002913). 비우면 전체 스캔"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -21,6 +26,7 @@ jobs:
     timeout-minutes: 150
     env:
       SCAN_MODE: gap
+      CHECK: ${{ inputs.check }}
     steps:
       - uses: actions/checkout@v4
 
@@ -125,7 +131,10 @@ jobs:
           # --- 컵앤핸들 파라미터 (오닐) -------------------------------------------------
           P = dict(up=0.20, lb=250, dmin=20, dmax=350, depth_lo=.08, depth_hi=.55,
                    rim=.10, rnd=.12, rnd_bars=5, dec_lo=.15, dec_hi=.82, dec_days=7,
-                   h_lo=3, h_hi=50, hd_lo=.02, hd_hi=.18, hvol=1.05, buf=.001,
+                   h_lo=3, h_hi=50, hd_lo=.01, hd_hi=.18, hvol=1.05, buf=.001,
+                   nh_rim=.08,        # 손잡이 없는 컵: 우측이 좌측 고점 -8% 이내까지 회복해야
+                   nh_stale=50,       # 회복 후 이 일수 안에 못 뚫으면 패턴 무효 (박스로 변질)
+                   nh_bo_max=60,      # 돌파 후 60일 넘은 건 제외
                    piv52_max=0.25, ath_piv_max=0.15, ath_over_max=0.08, list1_ath_max=0.35,
                    top_ath_max=0.15, top_rs_min=65, top_depth_max=45, top_weeks_max=50,
                    top_hvol_max=1.00, top_dist=8.0, min_bars_2y=400)
@@ -183,7 +192,9 @@ jobs:
           # =============================================================================
           #  컵앤핸들 검출 (기존 로직 그대로)
           # =============================================================================
-          def detect_cup(df, tk, mkt, minp, minvol=0):
+          def detect_cup(df, tk, mkt, minp, minvol=0, why=None):
+              """why 에 리스트를 넘기면 후보(좌측 고점)별로 어느 조건에서 떨어졌는지 기록한다."""
+              W = (lambda li, msg: why.append((str(df.index[li].date()), msg))) if why is not None else (lambda li, msg: None)
               pre = _prep(df, minp, minvol)
               if pre is None:
                   return []
@@ -195,12 +206,14 @@ jobs:
 
               for li in peaks(h)[::-1]:
                   if n - li < P["dmin"]:
+                      W(li, f"좌측 고점이 너무 최근 ({n-li}일 전, 최소 {P['dmin']}일)")
                       continue
                   if n - li > P["dmax"] + P["h_hi"]:
                       break
                   lv = h[li]
                   lb = max(0, li - P["lb"])
                   if li - lb < 20 or lv / float(np.min(l[lb:li])) - 1 < P["up"]:
+                      W(li, f"컵 전 사전 상승 부족 ({(lv/float(np.min(l[lb:li]))-1)*100:.0f}%, 최소 {P['up']*100:.0f}%)")
                       continue
                   se = min(n, li + P["dmax"] + 1)
                   if se - li < 12:
@@ -209,9 +222,11 @@ jobs:
                   bv = l[bi]
                   depth = 1 - bv / lv
                   if not (P["depth_lo"] <= depth <= P["depth_hi"]):
+                      W(li, f"컵 깊이 {depth*100:.0f}% (허용 {P['depth_lo']*100:.0f}~{P['depth_hi']*100:.0f}%)")
                       continue
                   touch = next((j for j in range(bi + 1, se) if h[j] >= lv * (1 - P["rim"])), None)
                   if touch is None:
+                      W(li, f"바닥 후 좌측 고점 -{P['rim']*100:.0f}% 까지 회복 못함 (아직 컵 우측이 안 올라옴)")
                       continue
                   ri, peak = None, touch
                   for j in range(touch, min(n, touch + P["h_hi"] + 1)):
@@ -221,17 +236,21 @@ jobs:
                           ri = peak
                           break
                   if ri is None or ri <= bi:
+                      W(li, f"손잡이 없음 — 우측 고점 뒤 {P['hd_lo']*100:.0f}% 이상 되밀림이 없음")
                       continue
                   cd = ri - li
                   if not (P["dmin"] <= cd <= P["dmax"]):
+                      W(li, f"컵 기간 {cd}일 (허용 {P['dmin']}~{P['dmax']}일)")
                       continue
                   cc = c[li:ri + 1]
                   thr = bv + (lv - bv) * .33
                   rnd = float(np.mean(cc <= thr))
                   if rnd < P["rnd"] or int(rnd * len(cc)) < P["rnd_bars"]:
+                      W(li, f"V자 모양 — 바닥권 체류 {rnd*100:.0f}% ({int(rnd*len(cc))}일), 최소 {P['rnd']*100:.0f}%·{P['rnd_bars']}일")
                       continue
                   dd = bi - li
                   if dd < P["dec_days"] or not (P["dec_lo"] <= dd / cd <= P["dec_hi"]):
+                      W(li, f"하락 구간 비율 {dd/cd*100:.0f}% 또는 하락 {dd}일 — 비대칭 컵")
                       continue
                   cav = float(np.nanmean(v[li:ri + 1]))
                   mid = bv + (lv - bv) * .5
@@ -240,15 +259,19 @@ jobs:
                   he = (bo_i - 1) if bo_i is not None else (n - 1)
                   hdays = he - ri
                   if not (P["h_lo"] <= hdays <= P["h_hi"]):
+                      W(li, f"손잡이 기간 {hdays}일 (허용 {P['h_lo']}~{P['h_hi']}일)")
                       continue
                   hl = float(np.min(l[ri:he + 1]))
                   hd = 1 - hl / h[ri]
                   if not (P["hd_lo"] <= hd <= P["hd_hi"]):
+                      W(li, f"손잡이 깊이 {hd*100:.1f}% (허용 {P['hd_lo']*100:.0f}~{P['hd_hi']*100:.0f}%)")
                       continue
                   if hl < mid:
+                      W(li, "손잡이 저점이 컵 중간 아래 — 손잡이가 너무 깊음")
                       continue
                   vr = float(np.nanmean(v[ri:he + 1])) / cav if cav > 0 else 9
                   if vr > P["hvol"]:
+                      W(li, f"손잡이 거래량이 컵 평균의 {vr:.2f}배 (최대 {P['hvol']:.2f}배) — 안 말랐음")
                       continue
                   d = last / piv - 1
                   if bo_i is None:
@@ -263,10 +286,11 @@ jobs:
                   off52 = (1 - last / hi52) if hi52 > 0 else 1.0
                   piv52 = (1 - piv / hi52) if hi52 > 0 else 1.0
                   if piv52 > P["piv52_max"]:
+                      W(li, f"피봇이 52주 고점보다 {piv52*100:.0f}% 아래 (최대 {P['piv52_max']*100:.0f}%) — 후발주")
                       continue
                   fresh_raw = bool(bo_i is not None and days_bo <= 5 and bo_v >= 1.4)
                   return [dict(ticker=tk, market=mkt, name="", last=round(last, 2), hi2y=round(float(np.max(h)), 2),
-                               pivot=round(piv, 2), dist=round(d * 100, 2),
+                               pattern="컵앤핸들", pivot=round(piv, 2), dist=round(d * 100, 2),
                                depth=round(depth * 100, 1), weeks=round(cd / 5, 1),
                                hdepth=round(hd * 100, 1), hvol=round(vr, 2), hdays=hdays,
                                actionable=bool(-.12 <= d <= .05), broke=bool(bo_i is not None),
@@ -281,7 +305,8 @@ jobs:
           # =============================================================================
           #  갭 돌파 검출
           # =============================================================================
-          def detect_gap(df, tk, mkt, minp, minvol=0):
+          def detect_gap(df, tk, mkt, minp, minvol=0, why=None):
+              W = (lambda g, msg: why.append((str(df.index[g].date()), msg))) if why is not None else (lambda g, msg: None)
               pre = _prep(df, minp, minvol, need_open=True)
               if pre is None:
                   return []
@@ -297,12 +322,15 @@ jobs:
                       continue
                   gap = o[g] / pc - 1
                   if gap < G["gap_min"] or o[g] <= ph:        # 전일 고가 위에서 열려야 진짜 갭
+                      if gap >= 0.01:
+                          W(g, f"시가 +{gap*100:.1f}% — " + ("전일 고가 아래에서 열림(갭 아님)" if o[g] <= ph else f"{G['gap_min']*100:.0f}% 미만"))
                       continue
                   base_v = float(np.nanmean(v[max(0, g - 50):g]))
                   if not base_v or base_v <= 0:
                       continue
                   vm = v[g] / base_v
                   if vm < G["vol_min"]:
+                      W(g, f"갭 +{gap*100:.1f}% 이지만 거래량 {vm:.1f}배 (최소 {G['vol_min']:.1f}배)")
                       continue
 
                   # 갭 직전 횡보 박스.
@@ -322,9 +350,11 @@ jobs:
                       else:
                           break
                   if loose is None:
+                      W(g, f"갭 +{gap*100:.1f}% 거래량 {vm:.1f}배 — 그러나 직전 {G['box_min']//5}주 폭이 {G['box_range']*100:.0f}% 넘음(횡보 아님)")
                       continue                                  # 최소 기간의 횡보가 없다
                   box_days, box_hi, box_lo = tight if tight else loose
                   if o[g] <= box_hi:
+                      W(g, f"갭 +{gap*100:.1f}% 거래량 {vm:.1f}배 — 그러나 시가 {o[g]:.2f} 가 박스 고점 {box_hi:.2f} 아래(성곽 안 갭)")
                       continue                                  # 박스 안에서 뛴 갭 — 제외
 
                   hi6m = float(np.max(h[max(0, g - 126):g]))    # 갭 직전 6개월 고점 = '성곽'
@@ -356,7 +386,108 @@ jobs:
               return []
 
 
-          detect = detect_cup if IS_CUP else detect_gap
+          def detect_cup_nh(df, tk, mkt, minp, minvol=0, why=None):
+              """
+              손잡이 없는 컵 (cup without handle, 오닐).
+              컵 우측이 좌측 고점 근처까지 회복한 뒤 되밀림 없이 곧장 뚫거나 뚫기 직전.
+              매수기준가 = 좌측 고점.  손잡이 컵이 검출되지 않은 종목에만 적용한다.
+              """
+              W = (lambda li, msg: why.append((str(df.index[li].date()), "[손잡이없는컵] " + msg))) \
+                  if why is not None else (lambda li, msg: None)
+              pre = _prep(df, minp, minvol)
+              if pre is None:
+                  return []
+              df, last, advol = pre
+              h, l, c, v = (df[x].to_numpy(float) for x in ("high", "low", "close", "volume"))
+              n, dts = len(df), df.index
+              rs = rs_score(c)
+              for li in peaks(h)[::-1]:
+                  if n - li < P["dmin"]:
+                      continue
+                  if n - li > P["dmax"] + P["nh_bo_max"]:
+                      break
+                  lv = h[li]
+                  lb = max(0, li - P["lb"])
+                  if li - lb < 20 or lv / float(np.min(l[lb:li])) - 1 < P["up"]:
+                      W(li, f"컵 전 사전 상승 부족 ({(lv/float(np.min(l[lb:li]))-1)*100:.0f}%)")
+                      continue
+                  se = min(n, li + P["dmax"] + 1)
+                  if se - li < 12:
+                      continue
+                  bi = li + 1 + int(np.argmin(l[li + 1:se]))
+                  bv = l[bi]
+                  depth = 1 - bv / lv
+                  if not (P["depth_lo"] <= depth <= P["depth_hi"]):
+                      W(li, f"컵 깊이 {depth*100:.0f}% (허용 {P['depth_lo']*100:.0f}~{P['depth_hi']*100:.0f}%)")
+                      continue
+                  touch = next((j for j in range(bi + 1, n) if h[j] >= lv * (1 - P["nh_rim"])), None)
+                  if touch is None:
+                      W(li, f"우측이 좌측 고점 -{P['nh_rim']*100:.0f}% 까지 아직 회복 못함 (현재 {(1-last/lv)*100:.0f}% 아래)")
+                      continue
+                  cd = touch - li
+                  if not (P["dmin"] <= cd <= P["dmax"]):
+                      W(li, f"컵 기간 {cd}일 (허용 {P['dmin']}~{P['dmax']}일)")
+                      continue
+                  cc = c[li:touch + 1]
+                  thr = bv + (lv - bv) * .33
+                  rnd = float(np.mean(cc <= thr))
+                  if rnd < P["rnd"] or int(rnd * len(cc)) < P["rnd_bars"]:
+                      W(li, f"V자 모양 — 바닥권 체류 {rnd*100:.0f}%")
+                      continue
+                  dd = bi - li
+                  if dd < P["dec_days"] or not (P["dec_lo"] <= dd / cd <= P["dec_hi"]):
+                      W(li, f"하락 구간 비율 {dd/cd*100:.0f}% — 비대칭")
+                      continue
+                  piv = lv * (1 + P["buf"])
+                  bo_i = next((j for j in range(touch, n) if c[j] > piv), None)
+                  if bo_i is None and n - 1 - touch > P["nh_stale"]:
+                      W(li, f"회복 후 {n-1-touch}일 동안 못 뚫음 — 박스로 변질")
+                      continue
+                  if bo_i is not None and n - 1 - bo_i > P["nh_bo_max"]:
+                      W(li, f"돌파가 {n-1-bo_i}일 전 — 너무 오래됨")
+                      continue
+                  # 우측 상승 구간 거래량 (상승일 / 하락일) — 매집 강도
+                  seg = range(bi + 1, bo_i if bo_i is not None else n)
+                  upv = sum(v[j] for j in seg if c[j] > c[j - 1])
+                  dnv = sum(v[j] for j in seg if c[j] < c[j - 1])
+                  acc = upv / dnv if dnv > 0 else 9.0
+                  d = last / piv - 1
+                  if bo_i is None:
+                      days_bo, bo_v, bo_date = None, 0.0, ""
+                  else:
+                      days_bo = n - 1 - bo_i
+                      base = float(np.nanmean(v[max(0, bo_i - 50):bo_i]))
+                      bo_v = round(v[bo_i] / base, 2) if base else 0.0
+                      bo_date = str(dts[bo_i].date())
+                  newly = n < P["min_bars_2y"]
+                  hi52 = float(np.max(h[-252:])) if n >= 252 else float(np.max(h))
+                  off52 = (1 - last / hi52) if hi52 > 0 else 1.0
+                  piv52 = (1 - piv / hi52) if hi52 > 0 else 1.0
+                  if piv52 > P["piv52_max"]:
+                      W(li, f"피봇이 52주 고점보다 {piv52*100:.0f}% 아래 — 후발주")
+                      continue
+                  fresh_raw = bool(bo_i is not None and days_bo <= 5 and bo_v >= 1.4)
+                  return [dict(ticker=tk, market=mkt, name="", last=round(last, 2), hi2y=round(float(np.max(h)), 2),
+                               pattern="손잡이없음", pivot=round(piv, 2), dist=round(d * 100, 2),
+                               depth=round(depth * 100, 1), weeks=round(cd / 5, 1),
+                               hdepth=0.0, hvol=np.nan, hdays=0, acc=round(acc, 2),
+                               actionable=bool(-.12 <= d <= .05), broke=bool(bo_i is not None),
+                               fresh_raw=fresh_raw, days_bo=days_bo, bo_date=bo_date, bo_vol=bo_v,
+                               off52=round(off52 * 100, 1), advol=round(advol, 0),
+                               rnd=round(rnd, 3), decr=round(dd / cd, 2),
+                               up=round((lv / float(np.min(l[lb:li])) - 1) * 100, 0),
+                               piv52=round(piv52 * 100, 1), newly=newly, bars=n, rs_raw=rs)]
+              return []
+
+
+          def detect_cup_any(df, tk, mkt, minp, minvol=0, why=None):
+              r = detect_cup(df, tk, mkt, minp, minvol, why=why)
+              if r:
+                  return r
+              return detect_cup_nh(df, tk, mkt, minp, minvol, why=why)
+
+
+          detect = detect_cup_any if IS_CUP else detect_gap
 
 
           # =============================================================================
@@ -807,9 +938,116 @@ jobs:
 
 
           # =============================================================================
+          #  진단 모드: CHECK 환경변수에 종목코드를 넣으면 그 종목만 검사해 탈락 이유를 보고서로 쓴다
+          # =============================================================================
+          def _norm_ticker(t):
+              t = t.strip().upper()
+              if not t:
+                  return []
+              if "." in t:
+                  return [t]
+              if t.isdigit() and len(t) == 6:
+                  if t[0] == "6":
+                      return [t + ".SS"]
+                  if t[0] in "03":
+                      return [t + ".KQ", t + ".KS", t + ".SZ"]
+                  return [t + ".KS", t + ".KQ", t + ".SZ"]
+              if t.isdigit() and len(t) == 4:
+                  return [t + ".T", t.zfill(4) + ".HK"]
+              if t.isdigit():
+                  return [t.zfill(4) + ".HK"]
+              return [t]
+
+
+          MKT_OF = {".KS": ("한국", "KR"), ".KQ": ("한국", "KR"), ".T": ("일본", "JP"), ".SS": ("중국", "CN"),
+                    ".SZ": ("중국", "CN"), ".HK": ("홍콩", "HK")}
+
+
+          def diagnose(raw):
+              out = [f"# 왜 안 잡혔나 — {'컵앤핸들' if IS_CUP else '갭 돌파'} 진단\n",
+                     f"_요청: `{raw}`_\n"]
+              for item in raw.split(","):
+                  cands = _norm_ticker(item)
+                  if not cands:
+                      continue
+                  df, used = None, None
+                  for tk in cands:
+                      try:
+                          d = yf.download(tk, period="2y", auto_adjust=False, progress=False)
+                          if d is not None and len(d) >= 30:
+                              if isinstance(d.columns, pd.MultiIndex):
+                                  d.columns = d.columns.get_level_values(0)
+                              df, used = d.rename(columns=str.lower), tk
+                              break
+                      except Exception:
+                          pass
+                      time.sleep(1)
+                  out.append(f"\n## {item.strip()} → `{used or '조회 실패'}`\n")
+                  if df is None:
+                      out.append("- 야후에서 시세를 못 받았습니다. 코드를 확인하세요 (예: 064290.KQ, 002913.SZ, 7203.T, 0700.HK, AAPL)\n")
+                      continue
+                  sfx = "." + used.split(".")[-1] if "." in used else None
+                  nm, code, minp, minvol = "미국", "US", 5, 5e6
+                  for _nm, _code, _fn, _en, _b, _minp, _mv in MKT:
+                      if sfx and MKT_OF.get(sfx, ("", ""))[1] == _code:
+                          nm, code, minp, minvol = _nm, _code, _minp, _mv
+                  n = len(df)
+                  last = float(df["close"].iloc[-1])
+                  c, v = df["close"].to_numpy(float), df["volume"].to_numpy(float)
+                  advol = float(np.nanmean(c[-50:] * v[-50:]))
+                  out.append(f"- 시장 {nm} · 데이터 {n}일 · 현재가 {last:,.2f} · 50일 평균 거래대금 {advol:,.0f}\n")
+                  pre_fail = []
+                  if n < 150:
+                      pre_fail.append(f"데이터 {n}일 < 150일 (상장 초기)")
+                  if last < minp:
+                      pre_fail.append(f"주가 {last} < 최저가 기준 {minp}")
+                  if minvol and advol < minvol:
+                      pre_fail.append(f"거래대금 {advol:,.0f} < 기준 {minvol:,.0f} — **스캔 대상에서 제외됨**")
+                  try:
+                      cache = json.load(open(f"cache/universe_{code}.json", encoding="utf-8"))
+                      in_uni = any(u[0] == used for u in cache.get("u", []))
+                      out.append(f"- 종목 목록 포함: {'예' if in_uni else '**아니오 — 목록에서 빠져 있음**'}\n")
+                  except Exception:
+                      pass
+                  if pre_fail:
+                      out.append("- **사전 필터 탈락:** " + " / ".join(pre_fail) + "\n")
+                  why = []
+                  res = detect(df, used, code, minp, minvol, why=why)
+                  if res:
+                      r = res[0]
+                      out.append("- ✅ **패턴 검출됨.** 리포트에 안 보였다면 아래 중 하나입니다:\n")
+                      if IS_CUP:
+                          out.append(f"  - 매수기준가 {r['pivot']:,.2f} · 현재가 대비 {r['dist']:+.1f}% → 상위 목록은 ±{P['top_dist']:.0f}% 안이어야 함\n")
+                          out.append(f"  - 돌파 {'됨 (' + str(r['days_bo']) + '일 전, 거래량 ' + str(r['bo_vol']) + '배)' if r['broke'] else '아직 안 됨'} → ★는 5일 이내·1.4배 이상\n")
+                          out.append(f"  - 컵 깊이 {r['depth']}% · 기간 {r['weeks']}주 · 손잡이 {r['hdepth']}% · 손잡이 거래량 {r['hvol']}배\n")
+                      else:
+                          out.append(f"  - 갭일 {r['gap_date']} ({r['days']}일 전) · 갭 {r['gap']}% · 거래량 {r['volx']}배 · 박스 {r['box_weeks']}주 폭 {r['box_range']}%\n")
+                          out.append(f"  - 성곽돌파 {'✓' if r['over6m'] else '✗'} · 완전돌파 {'✓' if r['clean'] else '✗'} · 갭유지 {'✓' if r['held'] else '✗'} · 갭시가 대비 {r['ext']:+.1f}%\n")
+                  else:
+                      out.append(f"- ❌ **패턴 미검출.** 후보별 탈락 이유 (최근 순):\n")
+                      seen = set()
+                      for d_, msg in why[:12]:
+                          if (d_, msg) in seen:
+                              continue
+                          seen.add((d_, msg))
+                          out.append(f"  - {d_}: {msg}\n")
+                      if not why:
+                          out.append("  - 후보가 될 좌측 고점/갭 자체가 없었습니다 (최근 구간에 뚜렷한 고점이나 갭이 없음)\n")
+              body = "".join(out)
+              open("summary.md", "w", encoding="utf-8").write(body)
+              open("issue_title.txt", "w", encoding="utf-8").write("왜 안 잡혔나")
+              open("pdfname.txt", "w").write("diag.pdf")
+              print(body)
+
+
+          # =============================================================================
           #  스캔
           # =============================================================================
           def main():
+              chk = os.environ.get("CHECK", "").strip()
+              if chk:
+                  diagnose(chk)
+                  return
               rows, REG, stats, cut = [], {}, [], False
               set_deadline(BUDGET * 0.80)
               try:
@@ -977,8 +1215,13 @@ jobs:
                       def score(r):
                           sc = 0.0
                           d = r["depth"]; sc += 20 if 15 <= d <= 25 else (14 if 12 <= d <= 33 else 4)
-                          h = r["hdepth"]; sc += 18 if 8 <= h <= 12 else (12 if 5 <= h <= 15 else 5)
-                          v = r["hvol"]; sc += 15 if v <= 0.60 else (11 if v <= 0.75 else 6)
+                          if r.get("pattern") == "손잡이없음":
+                              a = r.get("acc", 1.0)
+                              sc += 18 if a >= 1.8 else (12 if a >= 1.3 else 5)     # 매집 강도
+                              sc += 15 if (r["bo_vol"] or 0) >= 1.5 else 6          # 돌파 거래량
+                          else:
+                              h = r["hdepth"]; sc += 18 if 8 <= h <= 12 else (12 if 5 <= h <= 15 else 5)
+                              v = r["hvol"]; sc += 15 if v <= 0.60 else (11 if v <= 0.75 else 6)
                           sc += min(r["rnd"], 0.45) / 0.45 * 15
                           w = r["weeks"]; sc += 12 if 7 <= w <= 30 else (7 if w <= 45 else 3)
                           a = r["ath_piv_off"]
@@ -989,17 +1232,20 @@ jobs:
                       res = res.sort_values(["fresh", "actionable", "ath_piv_off"],
                                             ascending=[False, False, True]).reset_index(drop=True)
                       D = P["top_dist"]
-                      conds = [(f"매수 기준가 ±{D:.0f}%", (res["dist"] >= -D) & (res["dist"] <= D)),
+                      conds = [("손잡이 있는 컵", res["pattern"] == "컵앤핸들"),
+                               (f"매수 기준가 ±{D:.0f}%", (res["dist"] >= -D) & (res["dist"] <= D)),
                                (f"사상최고가 −{P['top_ath_max']*100:.0f}% 이내", res["ath_piv_off"] <= P["top_ath_max"] * 100),
                                (f"상대강도 {P['top_rs_min']} 이상", res["rs_pct"] >= P["top_rs_min"]),
                                (f"컵 깊이 {P['top_depth_max']}% 이하", res["depth"] <= P["top_depth_max"]),
                                (f"베이스 {P['top_weeks_max']}주 이하", res["weeks"] <= P["top_weeks_max"]),
                                ("손잡이 거래량 감소", res["hvol"] <= P["top_hvol_max"])]
-                      l1 = res[["name", "ticker", "market", "last", "pivot", "dist", "depth", "weeks",
-                                "hdepth", "actionable", "broke", "fresh", "days_bo", "bo_date", "bo_vol",
+                      if "acc" not in res.columns:
+                          res["acc"] = np.nan
+                      l1 = res[["name", "ticker", "market", "pattern", "last", "pivot", "dist", "depth", "weeks",
+                                "hdepth", "acc", "actionable", "broke", "fresh", "days_bo", "bo_date", "bo_vol",
                                 "ath", "ath_piv_off", "ath_over", "off52", "newly", "rs_pct", "score"]].copy()
-                      l1.columns = ["종목명", "코드", "시장", "현재가", "매수기준가", "기준가까지%", "컵깊이%",
-                                    "컵기간주", "손잡이%", "매수권", "돌파", "막돌파", "돌파후일수", "돌파일",
+                      l1.columns = ["종목명", "코드", "시장", "패턴", "현재가", "매수기준가", "기준가까지%", "컵깊이%",
+                                    "컵기간주", "손잡이%", "매집강도", "매수권", "돌파", "막돌파", "돌파후일수", "돌파일",
                                     "돌파거래량", "사상최고가", "피봇_최고가대비%", "현재가_최고가대비%",
                                     "52주고점대비%", "신규상장", "상대강도", "컵점수"]
                   else:
@@ -1182,6 +1428,9 @@ jobs:
                       if not IS_CUP:
                           seg.append(f"박스 {r['횡보주']:.0f}주 · 폭 {r['횡보폭%']:.0f}%"
                                      + (" · 완전돌파" if r["완전돌파"] else ""))
+                      elif r.get("패턴") == "손잡이없음":
+                          a = r.get("매집강도")
+                          seg.append("손잡이 없는 컵" + (f" · 상승일 거래량 {a:.1f}배" if pd.notna(a) else ""))
                       rs_ = r.get("상대강도")
                       if pd.notna(rs_):
                           seg.append(f"주가강도 상위 {100-rs_:.0f}% (최상위권)" if rs_ >= 90 else
@@ -1259,10 +1508,12 @@ jobs:
                            f"상대강도 {P['top_rs_min']} 이상 · 컵 깊이 {P['top_depth_max']}% 이하 · "
                            f"베이스 {P['top_weeks_max']}주 이하 · 손잡이 거래량 감소",
                   list1="results/list1_cup.csv", list0="results/list0_ath_breakout.csv",
-                  FC=["NEW", "종목명", "코드", "섹터", "현재가", "매수기준가", "돌파일", "돌파후일수",
+                  FC=["NEW", "종목명", "코드", "섹터", "패턴", "현재가", "매수기준가", "돌파일", "돌파후일수",
                       "돌파거래량", "현재가_최고가대비%", "투자포인트"],
                   TC=["NEW", "종목명", "코드", "섹터", "컵점수", "연속일", "현재가", "매수기준가",
                       "기준가까지%", "컵기간주", "투자포인트"],
+                  NH=["NEW", "종목명", "코드", "섹터", "현재가", "매수기준가", "기준가까지%", "컵깊이%", "컵기간주",
+                      "돌파일", "돌파거래량", "매집강도", "현재가_최고가대비%", "투자포인트"],
                   score="컵점수", foot="윌리엄 오닐 컵앤핸들·캔슬림 기준 자동 스캔 결과.")
           else:
               CFG = dict(
@@ -1505,6 +1756,13 @@ jobs:
                   md.append(f"\n## 어제까지 있다가 빠진 종목 {len(GONE)}개\n")
                   md.append("_조건에서 이탈했습니다. 보유 중이면 확인해보세요._\n")
                   md.append(" · ".join(f"{nm}({tk})" for tk, nm in GONE) + "\n")
+              if IS_CUP and len(l1) and "패턴" in l1.columns:
+                  nh = l1[(l1["패턴"] == "손잡이없음") & (l1["매수권"] | l1["막돌파"])]
+                  nh = nh.sort_values(["NEW", "기준가까지%"], ascending=[False, False]).head(40)
+                  md += ["", f"\n## 손잡이 없는 컵 {len(nh)}개\n",
+                         f"_컵 우측이 좌측 고점 −{P['nh_rim']*100:.0f}% 이내까지 회복했고 되밀림(손잡이) 없이 곧장 뚫거나 "
+                         f"뚫기 직전. 매수기준가 = 좌측 고점. 기준가 −12% ~ +5% 또는 5일 내 돌파._\n"]
+                  md += by_country(nh, CFG["NH"], open_first=True)
               md.append(f"\n## 리스트 2 — 캔슬림 통과 {len(l2)}개\n")
               if len(l2):
                   t2 = l2.rename(columns={"name": "종목명", "ticker": "코드", "market": "시장",
@@ -1564,6 +1822,13 @@ jobs:
                                f'<td class="n">{cv_}개</td></tr>')
                   H.append('</tbody></table>')
               H.append(h_country(top, TC))
+              if IS_CUP and len(l1) and "패턴" in l1.columns:
+                  nh = l1[(l1["패턴"] == "손잡이없음") & (l1["매수권"] | l1["막돌파"])]
+                  nh = nh.sort_values(["NEW", "기준가까지%"], ascending=[False, False]).head(40)
+                  H.append(f'<h2>손잡이 없는 컵 <span class="sm">{len(nh)}개 · 매수기준가 = 좌측 고점</span></h2>'
+                           f'<p class="note">컵 우측이 좌측 고점 −{P["nh_rim"]*100:.0f}% 이내까지 회복, 되밀림 없이 곧장 돌파 또는 직전 · '
+                           f'기준가 −12% ~ +5% 또는 5일 내 돌파</p>')
+                  H.append(h_country(nh, CFG["NH"]))
               if globals().get("GONE"):
                   H.append(f'<h2>어제까지 있다가 빠진 종목 <span class="sm">{len(GONE)}개</span></h2>')
                   H.append('<div class="gone">' + " · ".join(f"{nm}({tk})" for tk, nm in GONE) + '</div>')
