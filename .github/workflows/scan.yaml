@@ -123,11 +123,11 @@ jobs:
           log = lambda m: print(f"[{(time.time()-T0)/60:5.1f}분] {m}", flush=True)
 
           # --- 컵앤핸들 파라미터 (오닐) -------------------------------------------------
-          P = dict(up=0.25, lb=250, dmin=30, dmax=350, depth_lo=.10, depth_hi=.55,
-                   rim=.10, rnd=.15, rnd_bars=8, dec_lo=.18, dec_hi=.80, dec_days=12,
-                   h_lo=4, h_hi=50, hd_lo=.025, hd_hi=.18, hvol=1.00, buf=.001,
+          P = dict(up=0.20, lb=250, dmin=20, dmax=350, depth_lo=.08, depth_hi=.55,
+                   rim=.10, rnd=.12, rnd_bars=5, dec_lo=.15, dec_hi=.82, dec_days=7,
+                   h_lo=3, h_hi=50, hd_lo=.02, hd_hi=.18, hvol=1.05, buf=.001,
                    piv52_max=0.25, ath_piv_max=0.15, ath_over_max=0.08, list1_ath_max=0.35,
-                   top_ath_max=0.15, top_rs_min=70, top_depth_max=40, top_weeks_max=40,
+                   top_ath_max=0.15, top_rs_min=65, top_depth_max=45, top_weeks_max=50,
                    top_hvol_max=1.00, top_dist=8.0, min_bars_2y=400)
 
           # --- 갭 돌파 파라미터 -----------------------------------------------------------
@@ -138,8 +138,8 @@ jobs:
           #    4) 지금도 박스 고점 위에 있어야 '갭 유지'
           G = dict(gap_min=0.02,        # 시가가 전일 종가 대비 +2% 이상
                    vol_min=1.5,         # 갭일 거래량 / 직전 50일 평균 (1차)
-                   top_vol=2.0,         # 상위 목록
-                   box_min=30,          # 횡보 최소 6주 (거래일)
+                   top_vol=1.6,         # 상위 목록
+                   box_min=20,          # 횡보 최소 4주 (거래일)
                    box_max=200,         # 최대 40주
                    box_range=0.45,      # 1차: 박스 고점/저점 폭 45% 이내
                    top_box_range=0.30,  # 상위: 30% 이내
@@ -1020,7 +1020,7 @@ jobs:
                           v = r["volx"]; sc += 20 if v >= 4 else (15 if v >= 3 else (11 if v >= 2.5 else 6))
                           w = r["box_weeks"]; sc += 15 if w >= 20 else (12 if w >= 12 else 8)
                           b = r["box_range"]; sc += 15 if b <= 15 else (11 if b <= 22 else 5)
-                          sc += 8 if r["clean"] else 2
+                          sc += 12 if r["clean"] else 2
                           sc += 4 if r["over6m"] else 0
                           a = r["ath_over"]
                           sc += 2 if pd.isna(a) else (10 if a >= -3 else (6 if a >= -10 else 2))
@@ -1035,7 +1035,6 @@ jobs:
                                (f"횡보 {G['box_min']//5}주 이상", res["box_weeks"] >= G["box_min"] / 5),
                                (f"횡보 폭 {G['top_box_range']*100:.0f}% 이내", res["box_range"] <= G["top_box_range"] * 100),
                                ("6개월 고점 돌파(성곽)", res["over6m"]),
-                               ("완전 돌파(갭 저가 > 박스 고점)", res["clean"]),
                                ("시장이 하락장 아님", res["market"].map(lambda m: REG.get(m, "") != "downtrend")),
                                (f"갭 시가 대비 +{G['ext_max']*100:.0f}% 이내", res["ext"] <= G["ext_max"] * 100),
                                (f"사상최고가 −{G['ath_max']*100:.0f}% 이내", res["ath_over"] >= -G["ath_max"] * 100),
@@ -1189,6 +1188,47 @@ jobs:
                                      f"주가강도 상위 {100-rs_:.0f}%" if rs_ >= 80 else f"주가강도 {rs_:.0f}점")
                       return " · ".join(x for x in seg if x) or "-"
 
+                  # ---------- 어제 목록과 비교해 NEW · 연속일 표시 ----------
+                  seen_path = f"cache/seen_{MODE}.json"
+                  try:
+                      hist = json.load(open(seen_path, encoding="utf-8"))
+                  except Exception:
+                      hist = {}
+                  today = time.strftime("%Y-%m-%d", time.gmtime(time.time() + 32400))
+
+                  def _streak(t):
+                      h = hist.get(t)
+                      if not h or not h.get("first"):
+                          return 1
+                      try:
+                          d0 = time.mktime(time.strptime(h["first"], "%Y-%m-%d"))
+                          d1 = time.mktime(time.strptime(today, "%Y-%m-%d"))
+                          return max(1, int((d1 - d0) / 86400) + 1)
+                      except Exception:
+                          return int(h.get("days", 1)) + 1
+
+                  l1["연속일"] = l1["코드"].map(_streak)
+                  l1["NEW"] = l1["연속일"] <= 1
+                  cur = set(l1["코드"])
+                  gone = sorted([(k, v) for k, v in hist.items()
+                                 if k not in cur and v.get("last") and v.get("last") != today],
+                                key=lambda kv: kv[1].get("last", ""), reverse=True)
+                  globals()["GONE"] = [(k, v.get("name", k)) for k, v in gone[:20]]
+                  nxt = {}
+                  for _, r in l1.iterrows():
+                      t = r["코드"]
+                      nxt[t] = {"first": hist.get(t, {}).get("first", today), "last": today,
+                                "name": str(r["종목명"])[:24], "days": int(r["연속일"])}
+                  keep_after = time.strftime("%Y-%m-%d", time.gmtime(time.time() + 32400 - 10 * 86400))
+                  for k, v in hist.items():
+                      if k not in nxt and v.get("last", "") >= keep_after:
+                          nxt[k] = v
+                  try:
+                      json.dump(nxt, open(seen_path, "w", encoding="utf-8"), ensure_ascii=False)
+                  except Exception:
+                      traceback.print_exc()
+                  log(f"신규 {int(l1['NEW'].sum())}종목 · 이탈 {len(gone)}종목")
+
                   l1["투자포인트"] = l1.apply(point, axis=1)
                   cols = list(l1.columns)
                   cols.insert(3, cols.pop(cols.index("섹터")))
@@ -1219,9 +1259,10 @@ jobs:
                            f"상대강도 {P['top_rs_min']} 이상 · 컵 깊이 {P['top_depth_max']}% 이하 · "
                            f"베이스 {P['top_weeks_max']}주 이하 · 손잡이 거래량 감소",
                   list1="results/list1_cup.csv", list0="results/list0_ath_breakout.csv",
-                  FC=["종목명", "코드", "섹터", "현재가", "매수기준가", "돌파일", "돌파후일수", "돌파거래량",
-                      "현재가_최고가대비%", "투자포인트"],
-                  TC=["종목명", "코드", "섹터", "컵점수", "현재가", "매수기준가", "기준가까지%", "투자포인트"],
+                  FC=["NEW", "종목명", "코드", "섹터", "현재가", "매수기준가", "돌파일", "돌파후일수",
+                      "돌파거래량", "현재가_최고가대비%", "투자포인트"],
+                  TC=["NEW", "종목명", "코드", "섹터", "컵점수", "연속일", "현재가", "매수기준가",
+                      "기준가까지%", "컵기간주", "투자포인트"],
                   score="컵점수", foot="윌리엄 오닐 컵앤핸들·캔슬림 기준 자동 스캔 결과.")
           else:
               CFG = dict(
@@ -1235,14 +1276,14 @@ jobs:
                   star_sort="갭후일수",
                   top_h="갭 돌파 상위", top_sub="성곽을 넘은 갭",
                   top_desc=f"갭 {G['star_days']}일 이내 · 거래량 {G['top_vol']:.1f}배 이상 · 횡보 {G['box_min']//5}주 이상 · "
-                           f"횡보 폭 {G['top_box_range']*100:.0f}% 이내 · 6개월 고점 돌파 · 완전 돌파(갭 저가가 박스 고점 위) · 시장 하락장 아님 · "
+                           f"횡보 폭 {G['top_box_range']*100:.0f}% 이내 · 6개월 고점 돌파 · 시장 하락장 아님 · "
                            f"갭 시가 대비 +{G['ext_max']*100:.0f}% 이내 · 사상최고가 −{G['ath_max']*100:.0f}% 이내 · "
                            f"상대강도 {G['rs_min']} 이상 · 갭 유지 중",
                   list1="results/list1_gap.csv", list0="results/list0_gap_fresh.csv",
-                  FC=["종목명", "코드", "섹터", "현재가", "갭일", "갭후일수", "갭크기%", "거래량배수", "박스고점",
-                      "갭시가", "갭시가대비%", "성곽돌파", "완전돌파", "최고가대비%", "투자포인트"],
-                  TC=["종목명", "코드", "섹터", "갭점수", "현재가", "갭크기%", "거래량배수", "횡보주", "횡보폭%",
-                      "박스고점", "성곽돌파", "완전돌파", "투자포인트"],
+                  FC=["NEW", "종목명", "코드", "섹터", "현재가", "갭일", "갭후일수", "갭크기%", "거래량배수",
+                      "박스고점", "갭시가", "갭시가대비%", "성곽돌파", "완전돌파", "최고가대비%", "투자포인트"],
+                  TC=["NEW", "종목명", "코드", "섹터", "갭점수", "연속일", "현재가", "갭크기%", "거래량배수",
+                      "횡보주", "횡보폭%", "성곽돌파", "완전돌파", "투자포인트"],
                   score="갭점수", foot="횡보 박스를 갭으로 뛰어넘은 종목 자동 스캔 결과.")
 
           NUMC = {"현재가", "매수기준가", "기준가까지%", "컵깊이%", "손잡이%", "컵점수", "돌파후일수", "돌파거래량",
@@ -1252,7 +1293,11 @@ jobs:
           SIGN = {"기준가까지%", "현재가_최고가대비%", "최고가대비%", "갭시가대비%", "박스위%"}
 
 
-          def fmt(v):
+          def fmt(v, col=None):
+              if col == "NEW":
+                  return "NEW" if v else ""
+              if col == "연속일":
+                  return "-" if pd.isna(v) else ("오늘" if v <= 1 else f"{int(v)}일째")
               if isinstance(v, (bool, np.bool_)):
                   return "✓" if v else "·"
               if isinstance(v, float):
@@ -1269,7 +1314,7 @@ jobs:
                   return "_해당 없음_\n"
               o = "| " + " | ".join(cols) + " |\n|" + "|".join(["---"] * len(cols)) + "|\n"
               for _, r in d[cols].head(n).iterrows():
-                  o += "| " + " | ".join(fmt(r[c]) for c in cols) + " |\n"
+                  o += "| " + " | ".join(fmt(r[c], c) for c in cols) + " |\n"
               return o
 
 
@@ -1341,7 +1386,11 @@ jobs:
                           cls.append("up" if v >= 0 else "dn")
                       if c in ("완전돌파", "성곽돌파"):
                           cls.append("ok" if v else "un")
-                      o.append('<td' + ((' class="' + " ".join(cls) + '"') if cls else '') + '>' + fmt(v) + '</td>')
+                      if c == "NEW":
+                          cls.append("new")
+                      if c == "연속일":
+                          cls.append("st")
+                      o.append('<td' + ((' class="' + " ".join(cls) + '"') if cls else '') + '>' + fmt(v, c) + '</td>')
                   o.append('</tr>')
               o.append('</tbody></table>')
               return "".join(o)
@@ -1398,6 +1447,11 @@ jobs:
               "td.cs{text-align:center;font-weight:700;width:17px}td.cs.ok{background:#e4f2ea;color:#12603c}"
               "td.cs.no{background:#fbe9e7;color:#9c2f27}td.cs.un{color:#bdb9b2}td.ok{color:#12603c;font-weight:700}"
               "td.un{color:#bdb9b2}"
+              "td.new{text-align:center;font-size:6.6pt;font-weight:700;color:#fff;background:#c8890f;"
+              "letter-spacing:.3px;width:26px}"
+              "td.st{text-align:right;color:#6b675f;font-size:7.8pt;white-space:nowrap}"
+              ".gone{border:1px solid #e0dcd5;border-left:5px solid #9a958c;background:#fbfaf8;"
+              "padding:8px 12px;margin-bottom:12px;font-size:8.2pt;color:#4a463f}"
               ".sec{border:1px solid #e0dcd5;border-left:5px solid #12355b;background:#fbfaf8;"
               "padding:9px 13px;margin-bottom:12px;font-size:8.6pt}.sec div{margin-bottom:3px}"
               '.none{color:#8d8880;font-style:italic;font-size:8.4pt;padding:4px 2px}'
@@ -1408,7 +1462,8 @@ jobs:
               stamp = time.strftime("%Y-%m-%d (%a)", time.gmtime(time.time() + 32400))
               failed = {a for a, b, c, d in stats if b == 0}
               fr = l1[l1["막돌파"] == True] if len(l1) else pd.DataFrame()  # noqa: E712
-              top = (l1[l1["코드"].isin(TOP30)].sort_values(CFG["score"], ascending=False)
+              top = (l1[l1["코드"].isin(TOP30)].sort_values(
+                         ["NEW", CFG["score"]], ascending=[False, False])
                      if len(l1) else l1)
               act = l1[l1["매수권"] == True] if (IS_CUP and len(l1)) else l1  # noqa: E712
               FC, TC = CFG["FC"], CFG["TC"]
@@ -1436,7 +1491,8 @@ jobs:
               md += ["", f"\n## {CFG['star_h']} {len(fr)}개 (오늘 신규 \U0001F195 {n_new}개)\n",
                      f"_{CFG['star_desc']}._\n",
                      "_나라 이름을 누르면 펼쳐집니다._\n"]
-              md += by_country(fr.sort_values(CFG["star_sort"]) if len(fr) else fr, FC)
+              md += by_country(fr.sort_values(["NEW", CFG["star_sort"]], ascending=[False, True])
+                               if len(fr) else fr, FC)
               md += ["", f"\n## {CFG['top_h']} {len(top)}개\n",
                      f"_전체 {len(l1)}개 중 아래 조건을 모두 통과한 종목입니다._\n",
                      f"_{CFG['top_desc']}._\n", f"_전체 목록은 {CFG['list1']} 에 있습니다._\n"]
@@ -1445,6 +1501,10 @@ jobs:
                   md += [f"| {cn_} | {cv_}개 |" for cn_, cv_ in COND_STAT]
                   md.append("")
               md += by_country(top, TC, open_first=True)
+              if globals().get("GONE"):
+                  md.append(f"\n## 어제까지 있다가 빠진 종목 {len(GONE)}개\n")
+                  md.append("_조건에서 이탈했습니다. 보유 중이면 확인해보세요._\n")
+                  md.append(" · ".join(f"{nm}({tk})" for tk, nm in GONE) + "\n")
               md.append(f"\n## 리스트 2 — 캔슬림 통과 {len(l2)}개\n")
               if len(l2):
                   t2 = l2.rename(columns={"name": "종목명", "ticker": "코드", "market": "시장",
@@ -1493,7 +1553,8 @@ jobs:
               H.append('</div>')
               H.append(f'<h2 class="star">{CFG["star_h"]} <span class="sm">{len(fr)}개</span></h2>'
                        f'<p class="note">{CFG["star_desc"]}</p>')
-              H.append(h_country(fr.sort_values(CFG["star_sort"]) if len(fr) else fr, FC))
+              H.append(h_country(fr.sort_values(["NEW", CFG["star_sort"]], ascending=[False, True])
+                                 if len(fr) else fr, FC))
               H.append(f'<h2>{CFG["top_h"]} {len(top)}개 <span class="sm">전체 {len(l1)}개 중 · '
                        f'{CFG["top_sub"]}</span></h2><p class="note">{CFG["top_desc"]} — 모두 통과한 종목</p>')
               if len(top) == 0 and COND_STAT:
@@ -1503,6 +1564,9 @@ jobs:
                                f'<td class="n">{cv_}개</td></tr>')
                   H.append('</tbody></table>')
               H.append(h_country(top, TC))
+              if globals().get("GONE"):
+                  H.append(f'<h2>어제까지 있다가 빠진 종목 <span class="sm">{len(GONE)}개</span></h2>')
+                  H.append('<div class="gone">' + " · ".join(f"{nm}({tk})" for tk, nm in GONE) + '</div>')
               H.append(f'<h2 class="cs">캔슬림 통과 <span class="sm">{len(l2)}개</span></h2>')
               if len(l2):
                   t2h = l2.rename(columns={"name": "종목명", "ticker": "코드", "market": "시장",
