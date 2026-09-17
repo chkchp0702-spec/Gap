@@ -7,7 +7,7 @@ on:
   workflow_dispatch:          # Actions 탭 → Run workflow 로 수동 실행
     inputs:
       check:
-        description: "왜 안 잡혔나 — 종목코드 (쉼표 구분, 예: 064290, 002913). 비우면 전체 스캔"
+        description: "왜 안 잡혔나 — 종목코드 (쉼표나 공백으로 구분, 예: 064290 036930 605058). 비우면 전체 스캔"
         required: false
         default: ""
 
@@ -129,13 +129,13 @@ jobs:
           log = lambda m: print(f"[{(time.time()-T0)/60:5.1f}분] {m}", flush=True)
 
           # --- 컵앤핸들 파라미터 (오닐) -------------------------------------------------
-          P = dict(up=0.20, lb=250, dmin=20, dmax=350, depth_lo=.08, depth_hi=.55,
+          P = dict(up=0.20, lb=250, dmin=20, dmax=350, depth_lo=.08, depth_hi=.60,
                    rim=.10, rnd=.12, rnd_bars=5, dec_lo=.15, dec_hi=.82, dec_days=7,
                    h_lo=3, h_hi=50, hd_lo=.01, hd_hi=.18, hvol=1.05, buf=.001,
-                   nh_rim=.08,        # 손잡이 없는 컵: 우측이 좌측 고점 -8% 이내까지 회복해야
+                   nh_rim=.12,        # 손잡이 없는 컵: 우측이 좌측 고점 -12% 이내까지 회복해야
                    nh_stale=50,       # 회복 후 이 일수 안에 못 뚫으면 패턴 무효 (박스로 변질)
                    nh_bo_max=60,      # 돌파 후 60일 넘은 건 제외
-                   piv52_max=0.25, ath_piv_max=0.15, ath_over_max=0.08, list1_ath_max=0.35,
+                   piv52_max=0.30, ath_piv_max=0.15, ath_over_max=0.08, list1_ath_max=0.60,
                    top_ath_max=0.15, top_rs_min=65, top_depth_max=45, top_weeks_max=50,
                    top_hvol_max=1.00, top_dist=8.0, min_bars_2y=400)
 
@@ -480,8 +480,28 @@ jobs:
               return []
 
 
+          # 손잡이가 아직 짧거나 얕아서 '완성'으로 보기 어려운 단계. 조건을 낮춰 한 번 더 본다.
+          FORM = dict(h_lo=1, hd_lo=.005, hd_hi=.25, hvol=1.35)
+
+
+          def detect_cup_forming(df, tk, mkt, minp, minvol=0, why=None):
+              """손잡이 형성 중 — 되밀림이 이제 막 시작됐거나 아주 얕은 경우."""
+              old = {k: P[k] for k in FORM}
+              P.update(FORM)
+              try:
+                  r = detect_cup(df, tk, mkt, minp, minvol, why=why)
+              finally:
+                  P.update(old)
+              for x in r:
+                  x["pattern"] = "손잡이형성중"
+              return r
+
+
           def detect_cup_any(df, tk, mkt, minp, minvol=0, why=None):
               r = detect_cup(df, tk, mkt, minp, minvol, why=why)
+              if r:
+                  return r
+              r = detect_cup_forming(df, tk, mkt, minp, minvol, why=why)
               if r:
                   return r
               return detect_cup_nh(df, tk, mkt, minp, minvol, why=why)
@@ -947,11 +967,11 @@ jobs:
               if "." in t:
                   return [t]
               if t.isdigit() and len(t) == 6:
-                  if t[0] == "6":
-                      return [t + ".SS"]
-                  if t[0] in "03":
-                      return [t + ".KQ", t + ".KS", t + ".SZ"]
-                  return [t + ".KS", t + ".KQ", t + ".SZ"]
+                  if t[0] == "6":                       # 상하이
+                      return [t + ".SS", t + ".KS", t + ".KQ"]
+                  if t[:3] in ("000", "001", "002", "003", "300", "301"):   # 선전 대역
+                      return [t + ".SZ", t + ".KQ", t + ".KS"]
+                  return [t + ".KS", t + ".KQ", t + ".SZ", t + ".SS"]
               if t.isdigit() and len(t) == 4:
                   return [t + ".T", t.zfill(4) + ".HK"]
               if t.isdigit():
@@ -966,25 +986,33 @@ jobs:
           def diagnose(raw):
               out = [f"# 왜 안 잡혔나 — {'컵앤핸들' if IS_CUP else '갭 돌파'} 진단\n",
                      f"_요청: `{raw}`_\n"]
-              for item in raw.split(","):
+              import re as _re
+              items = [x for x in _re.split(r"[\s,;/]+", raw) if x.strip()]
+              for item in items:
                   cands = _norm_ticker(item)
                   if not cands:
                       continue
-                  df, used = None, None
+                  df, used, tried = None, None, []
                   for tk in cands:
                       try:
                           d = yf.download(tk, period="2y", auto_adjust=False, progress=False)
                           if d is not None and len(d) >= 30:
                               if isinstance(d.columns, pd.MultiIndex):
                                   d.columns = d.columns.get_level_values(0)
-                              df, used = d.rename(columns=str.lower), tk
-                              break
+                              d = d.rename(columns=str.lower)
+                              if df is None or len(d) > len(df):   # 데이터가 가장 긴 시장을 채택
+                                  df, used = d, tk
+                              if len(cands) == 1:
+                                  break
+                          else:
+                              tried.append(tk)
                       except Exception:
-                          pass
+                          tried.append(tk)
                       time.sleep(1)
                   out.append(f"\n## {item.strip()} → `{used or '조회 실패'}`\n")
                   if df is None:
-                      out.append("- 야후에서 시세를 못 받았습니다. 코드를 확인하세요 (예: 064290.KQ, 002913.SZ, 7203.T, 0700.HK, AAPL)\n")
+                      out.append(f"- 야후에서 시세를 못 받았습니다. 시도한 코드: {', '.join(cands)}\n")
+                      out.append("- 접미사를 직접 붙여보세요 — 한국 `.KS`/`.KQ`, 상하이 `.SS`, 선전 `.SZ`, 일본 `.T`, 홍콩 `.HK`, 미국은 티커 그대로\n")
                       continue
                   sfx = "." + used.split(".")[-1] if "." in used else None
                   nm, code, minp, minvol = "미국", "US", 5, 5e6
@@ -1210,6 +1238,8 @@ jobs:
                       res["fresh"] = res["fresh_raw"] & res["ath_ok"]
                       lim = P["list1_ath_max"] * 100
                       keep = res["ath_piv_off"].isna() | (res["ath_piv_off"] <= lim)
+                      if int((~keep).sum()):
+                          log(f"  사상최고가 -{lim:.0f}% 밖이라 제외 {int((~keep).sum())}종목")
                       res = res[keep].reset_index(drop=True)
 
                       def score(r):
@@ -1232,7 +1262,8 @@ jobs:
                       res = res.sort_values(["fresh", "actionable", "ath_piv_off"],
                                             ascending=[False, False, True]).reset_index(drop=True)
                       D = P["top_dist"]
-                      conds = [("손잡이 있는 컵", res["pattern"] == "컵앤핸들"),
+                      conds = [("손잡이 있는 컵(형성 중 포함)",
+                                res["pattern"].isin(["컵앤핸들", "손잡이형성중"])),
                                (f"매수 기준가 ±{D:.0f}%", (res["dist"] >= -D) & (res["dist"] <= D)),
                                (f"사상최고가 −{P['top_ath_max']*100:.0f}% 이내", res["ath_piv_off"] <= P["top_ath_max"] * 100),
                                (f"상대강도 {P['top_rs_min']} 이상", res["rs_pct"] >= P["top_rs_min"]),
