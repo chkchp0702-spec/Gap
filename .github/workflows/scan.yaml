@@ -129,14 +129,14 @@ jobs:
           log = lambda m: print(f"[{(time.time()-T0)/60:5.1f}분] {m}", flush=True)
 
           # --- 컵앤핸들 파라미터 (오닐) -------------------------------------------------
-          P = dict(up=0.20, lb=250, dmin=20, dmax=350, depth_lo=.08, depth_hi=.60,
-                   rim=.10, rnd=.12, rnd_bars=5, dec_lo=.15, dec_hi=.82, dec_days=7,
+          P = dict(up=0.20, lb=250, dmin=20, dmax=350, depth_lo=.08, depth_hi=.70,
+                   rim=.10, rnd=.09, rnd_bars=4, dec_lo=.15, dec_hi=.82, dec_days=7,
                    h_lo=3, h_hi=50, hd_lo=.01, hd_hi=.18, hvol=1.05, buf=.001,
                    nh_rim=.12,        # 손잡이 없는 컵: 우측이 좌측 고점 -12% 이내까지 회복해야
                    nh_stale=50,       # 회복 후 이 일수 안에 못 뚫으면 패턴 무효 (박스로 변질)
                    nh_bo_max=60,      # 돌파 후 60일 넘은 건 제외
                    piv52_max=0.30, ath_piv_max=0.15, ath_over_max=0.08, list1_ath_max=0.60,
-                   top_ath_max=0.15, top_rs_min=65, top_depth_max=45, top_weeks_max=50,
+                   top_ath_max=0.15, top_rs_min=65, top_depth_max=50, top_weeks_max=50,
                    top_hvol_max=1.00, top_dist=8.0, min_bars_2y=400)
 
           # --- 갭 돌파 파라미터 -----------------------------------------------------------
