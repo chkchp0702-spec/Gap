@@ -10,6 +10,14 @@ on:
         description: "왜 안 잡혔나 — 종목코드 (쉼표나 공백으로 구분, 예: 064290 036930 605058). 비우면 전체 스캔"
         required: false
         default: ""
+      cn_connect_only:
+        description: "중국: 후강퉁·선강퉁(국내 매매 가능) 종목만"
+        type: boolean
+        default: true
+      cn_main_only:
+        description: "중국: 창업판(3xxxxx)·과창판(688) 제외"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -27,6 +35,8 @@ jobs:
     env:
       SCAN_MODE: gap
       CHECK: ${{ inputs.check }}
+      CN_CONNECT_ONLY: ${{ (github.event_name != 'workflow_dispatch' || inputs.cn_connect_only) && '1' || '0' }}
+      CN_MAIN_ONLY: ${{ (github.event_name != 'workflow_dispatch' || inputs.cn_main_only) && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -121,6 +131,9 @@ jobs:
               signal.alarm(0)
 
 
+          # 중국: 국내 증권사에서 실제로 매매 가능한 종목만 볼지
+          CN_CONNECT_ONLY = os.environ.get("CN_CONNECT_ONLY", "1") != "0"   # 후강퉁·선강퉁(북향)만
+          CN_MAIN_ONLY = os.environ.get("CN_MAIN_ONLY", "1") != "0"         # 창업판(3xxxxx)·과창판(688) 제외
           BUDGET = float(os.environ.get("TIME_BUDGET_MIN", "70"))
           TOPF = int(os.environ.get("TOP_FUND", "150"))
           os.makedirs("results", exist_ok=True)
@@ -737,19 +750,81 @@ jobs:
               raise last_err or RuntimeError("jpx")
 
 
+          def cn_suffix(code):
+              """
+              중국 A주 실제 코드 대역만 통과시킨다. B주·존재하지 않는 대역은 None.
+                상하이 .SS : 600000-603999 (주판), 605000-605999 (주판), 688000-689999 (과창판)
+                선전  .SZ : 000001-001999 (주판), 002000-004999 (구 중소판), 300000-302999 (창업판)
+              """
+              if not (code.isdigit() and len(code) == 6):
+                  return None
+              k = int(code)
+              if 600000 <= k <= 603999 or 605000 <= k <= 605999 or 688000 <= k <= 689999:
+                  return ".SS"
+              if 1 <= k <= 1999 or 2000 <= k <= 4999 or 300000 <= k <= 302999:
+                  return ".SZ"
+              return None                      # 900xxx·200xxx(B주), 그 밖의 대역은 제외
+
+
+          def cn_connect_codes():
+              """
+              후강퉁·선강퉁(북향) 매매 가능 종목코드 집합.
+              akshare 함수명이 버전마다 달라서 여러 경로를 시도하고, 반환된 표에서
+              '代码'가 들어간 열의 6자리 숫자를 그대로 긁어모은다. 성공하면 캐시에 저장.
+              """
+              path = "cache/cn_connect.json"
+              import akshare as ak
+              cand = []
+              for nm, fn in [
+                  ("hold_sh", lambda: ak.stock_hsgt_hold_stock_em(market="沪股通", indicator="今日排行")),
+                  ("hold_sz", lambda: ak.stock_hsgt_hold_stock_em(market="深股通", indicator="今日排行")),
+                  ("stat_north", lambda: ak.stock_hsgt_stock_statistics_em(symbol="北向持股")),
+                  ("stat_sh", lambda: ak.stock_hsgt_stock_statistics_em(symbol="沪股通")),
+                  ("stat_sz", lambda: ak.stock_hsgt_stock_statistics_em(symbol="深股通")),
+              ]:
+                  try:
+                      df = fn()
+                      if df is None or not len(df):
+                          continue
+                      cols = [c for c in df.columns if "代码" in str(c) or "code" in str(c).lower()]
+                      for c in cols:
+                          for x in df[c].astype(str):
+                              x = x.strip()[-6:]
+                              if x.isdigit() and len(x) == 6:
+                                  cand.append(x)
+                  except Exception:
+                      pass
+              codes = {c for c in cand if cn_suffix(c)}
+              if len(codes) >= 300:
+                  try:
+                      json.dump(sorted(codes), open(path, "w", encoding="utf-8"))
+                  except Exception:
+                      traceback.print_exc()
+                  print(f"    (후강퉁·선강퉁 {len(codes):,}종목 확인)", flush=True)
+                  return codes
+              try:                                    # 조회 실패 → 캐시
+                  old = set(json.load(open(path, encoding="utf-8")))
+                  if len(old) >= 300:
+                      print(f"    (후강퉁·선강퉁 캐시 {len(old):,}종목 사용)", flush=True)
+                      return old
+              except Exception:
+                  pass
+              print("    (후강퉁·선강퉁 목록 확인 실패 — 시가총액 기준으로 대체)", flush=True)
+              return None
+
+
           def u_cn():
               import akshare as ak
 
               def pairs(df, cc, cn):
                   o = []
                   for _, r in df.iterrows():
-                      c, nm = str(r[cc]).strip()[:6], str(r[cn])[:20]
-                      if not c.isdigit():
-                          continue
-                      if c.startswith("6"):
-                          o.append((c + ".SS", nm))
-                      elif c.startswith(("0", "3")):
-                          o.append((c + ".SZ", nm))
+                      raw = str(r[cc]).strip()
+                      c = raw[-6:] if len(raw) > 6 else raw          # 'sh600000' 같은 접두사 제거
+                      nm = str(r[cn]).strip()[:20]
+                      sfx = cn_suffix(c)
+                      if sfx and nm and nm.upper() not in ("NAN", "NONE"):
+                          o.append((c + sfx, nm))
                   return o
 
               routes = [("eastmoney_code_name", lambda: ak.stock_info_a_code_name(), "code", "name"),
@@ -808,10 +883,9 @@ jobs:
 
           def enum_cn():
               o = []
-              for lo, hi in [(600000, 601000), (601000, 601900), (603000, 603900),
-                             (605000, 605600), (688000, 688900)]:
+              for lo, hi in [(600000, 604000), (605000, 606000), (688000, 689000)]:
                   o += [(f"{c}.SS", f"SH{c}") for c in range(lo, hi)]
-              for lo, hi in [(1, 1000), (2000, 3100), (300000, 301700)]:
+              for lo, hi in [(1, 2000), (2000, 5000), (300000, 303000)]:
                   o += [(f"{c:06d}.SZ", f"SZ{c:06d}") for c in range(lo, hi)]
               return o
 
@@ -1103,6 +1177,28 @@ jobs:
                               extra = (rest + rest)[k:k + 700]
                               uni = uni + extra
                               unote += f" + 신규탐색 {len(extra)}"
+                      if code == "CN":                    # 캐시·코드대역에서 온 목록도 대역 검증
+                          before = len(uni)
+                          uni = [(t, nm) for t, nm in uni
+                                 if cn_suffix(t.split(".")[0]) == "." + t.split(".")[-1]]
+                          if before != len(uni):
+                              log(f"  중국 코드 대역 밖 {before - len(uni):,}개 제외")
+                          if CN_MAIN_ONLY:                # 창업판·과창판은 국내 리테일 매매 제한
+                              before = len(uni)
+                              uni = [(t, nm) for t, nm in uni
+                                     if not (t[:3] in ("300", "301", "302", "688", "689"))]
+                              if before != len(uni):
+                                  log(f"  창업판·과창판 {before - len(uni):,}개 제외")
+                          if CN_CONNECT_ONLY:
+                              ok = cn_connect_codes()
+                              if ok:
+                                  before = len(uni)
+                                  uni = [(t, nm) for t, nm in uni if t.split(".")[0] in ok]
+                                  unote += f" · 후강퉁·선강퉁 {len(uni):,}"
+                                  log(f"  매매 불가(북향 제외) {before - len(uni):,}개 제외")
+                              else:                       # 목록을 못 받으면 유동성 기준을 크게 올려 대체
+                                  minvol = max(minvol, 3e8)
+                                  unote += " · 북향목록 실패(거래대금 3억위안 기준)"
                       log(f"  {len(uni):,}종목 ({unote})")
                       f0, nd = len(rows), 0
                       alive = []                           # 실제로 시세가 온 종목 (코드대역일 때 캐시용)
@@ -1140,9 +1236,20 @@ jobs:
                               nd += len(syms)
                               time.sleep(2)
                               continue
+                          multi = isinstance(data.columns, pd.MultiIndex)
+                          lvl0 = set(data.columns.get_level_values(0)) if multi else set()
                           for tk in syms:
                               try:
-                                  d = data[tk] if isinstance(data.columns, pd.MultiIndex) else data
+                                  if multi:
+                                      if tk not in lvl0:      # 응답에 없는 종목은 건너뛴다
+                                          nd += 1
+                                          continue
+                                      d = data[tk]
+                                  elif len(syms) == 1:        # 단일 종목 응답일 때만 그대로 사용
+                                      d = data
+                                  else:                       # 여러 개를 요청했는데 단일 프레임이면 매칭 불가
+                                      nd += 1
+                                      continue
                                   d = d.dropna(how="all").rename(columns=str.lower)
                                   if len(d) < 150:
                                       nd += 1
