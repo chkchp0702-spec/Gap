@@ -149,8 +149,9 @@ jobs:
                    nh_stale=50,       # 회복 후 이 일수 안에 못 뚫으면 패턴 무효 (박스로 변질)
                    nh_bo_max=60,      # 돌파 후 60일 넘은 건 제외
                    piv52_max=0.30, ath_piv_max=0.15, ath_over_max=0.08, list1_ath_max=0.60,
-                   top_ath_max=0.15, top_rs_min=65, top_depth_max=50, top_weeks_max=50,
-                   top_hvol_max=1.00, top_dist=8.0, min_bars_2y=400)
+                   top_ath_max=0.15, top_rs_min=65, top_depth_max=65, top_weeks_max=50,
+                   top_hvol_max=1.10, top_dist=8.0, min_bars_2y=400,
+                   bo_vol_min=1.25)      # ★ 돌파일 거래량 (직전 50일 평균 대비)
 
           # --- 갭 돌파 파라미터 -----------------------------------------------------------
           #  핵심 논리: "최근 몇 달간 형성된 가격 범위(성곽)를 갭으로 뛰어넘는다"
@@ -301,7 +302,7 @@ jobs:
                   if piv52 > P["piv52_max"]:
                       W(li, f"피봇이 52주 고점보다 {piv52*100:.0f}% 아래 (최대 {P['piv52_max']*100:.0f}%) — 후발주")
                       continue
-                  fresh_raw = bool(bo_i is not None and days_bo <= 5 and bo_v >= 1.4)
+                  fresh_raw = bool(bo_i is not None and days_bo <= 5 and bo_v >= P["bo_vol_min"])
                   return [dict(ticker=tk, market=mkt, name="", last=round(last, 2), hi2y=round(float(np.max(h)), 2),
                                pattern="컵앤핸들", pivot=round(piv, 2), dist=round(d * 100, 2),
                                depth=round(depth * 100, 1), weeks=round(cd / 5, 1),
@@ -479,7 +480,7 @@ jobs:
                   if piv52 > P["piv52_max"]:
                       W(li, f"피봇이 52주 고점보다 {piv52*100:.0f}% 아래 — 후발주")
                       continue
-                  fresh_raw = bool(bo_i is not None and days_bo <= 5 and bo_v >= 1.4)
+                  fresh_raw = bool(bo_i is not None and days_bo <= 5 and bo_v >= P["bo_vol_min"])
                   return [dict(ticker=tk, market=mkt, name="", last=round(last, 2), hi2y=round(float(np.max(h)), 2),
                                pattern="손잡이없음", pivot=round(piv, 2), dist=round(d * 100, 2),
                                depth=round(depth * 100, 1), weeks=round(cd / 5, 1),
@@ -1035,11 +1036,16 @@ jobs:
           #  진단 모드: CHECK 환경변수에 종목코드를 넣으면 그 종목만 검사해 탈락 이유를 보고서로 쓴다
           # =============================================================================
           def _norm_ticker(t):
-              t = t.strip().upper()
+              t = t.strip().upper().lstrip(".").rstrip(".")
               if not t:
                   return []
               if "." in t:
-                  return [t]
+                  code, sfx = t.rsplit(".", 1)
+                  sfx = {"KOSPI": "KS", "KOSDAQ": "KQ", "SH": "SS", "SZSE": "SZ",
+                         "SSE": "SS", "TSE": "T", "HKEX": "HK"}.get(sfx, sfx)
+                  if code.isdigit() and len(code) < 6 and sfx in ("KS", "KQ", "SS", "SZ"):
+                      code = code.zfill(6)              # 64290.KQ → 064290.KQ
+                  return [f"{code}.{sfx}"]
               if t.isdigit() and len(t) == 6:
                   if t[0] == "6":                       # 상하이
                       return [t + ".SS", t + ".KS", t + ".KQ"]
@@ -1061,7 +1067,11 @@ jobs:
               out = [f"# 왜 안 잡혔나 — {'컵앤핸들' if IS_CUP else '갭 돌파'} 진단\n",
                      f"_요청: `{raw}`_\n"]
               import re as _re
-              items = [x for x in _re.split(r"[\s,;/]+", raw) if x.strip()]
+              # 아이폰 키보드가 점 뒤에 공백을 넣거나 첫 글자를 대문자로 바꾸는 경우가 있어
+              # '064290. Kq' 같은 입력도 '064290.KQ' 로 붙여서 읽는다.
+              txt = _re.sub(r"\.\s+", ".", raw.strip())            # 점 뒤 공백 제거
+              txt = _re.sub(r"\s+\.", ".", txt)                    # 점 앞 공백 제거
+              items = [x for x in _re.split(r"[\s,;/·、]+", txt) if x.strip()]
               for item in items:
                   cands = _norm_ticker(item)
                   if not cands:
@@ -1376,7 +1386,7 @@ jobs:
                                (f"상대강도 {P['top_rs_min']} 이상", res["rs_pct"] >= P["top_rs_min"]),
                                (f"컵 깊이 {P['top_depth_max']}% 이하", res["depth"] <= P["top_depth_max"]),
                                (f"베이스 {P['top_weeks_max']}주 이하", res["weeks"] <= P["top_weeks_max"]),
-                               ("손잡이 거래량 감소", res["hvol"] <= P["top_hvol_max"])]
+                               (f"손잡이 거래량 {P['top_hvol_max']:.2f}배 이하", res["hvol"] <= P["top_hvol_max"])]
                       if "acc" not in res.columns:
                           res["acc"] = np.nan
                       l1 = res[["name", "ticker", "market", "pattern", "last", "pivot", "dist", "depth", "weeks",
@@ -1638,7 +1648,8 @@ jobs:
                   title="컵앤핸들 리스트", issue="컵앤핸들",
                   kpi=["★ 사상최고가 돌파", "컵 모양 상위", "캔슬림 통과", "컵 모양 전체"],
                   star_h="★ 사상최고가 돌파 종목",
-                  star_desc=f"컵앤핸들 완성 후 5거래일 이내 · 거래량 동반 · 손잡이 고점이 사상최고가 −{P['ath_piv_max']*100:.0f}% 이내 · "
+                  star_desc=f"컵앤핸들 완성 후 5거래일 이내 · 돌파 거래량 {P['bo_vol_min']:.2f}배 이상 · "
+                            f"손잡이 고점이 사상최고가 −{P['ath_piv_max']*100:.0f}% 이내 · "
                             f"현재가가 사상최고가 +{P['ath_over_max']*100:.0f}% 이내 · 상장 2년 미만 제외",
                   star_sort="돌파후일수",
                   top_h="컵 모양 상위", top_sub=f"매수 기준가 ±{P['top_dist']:.0f}%",
