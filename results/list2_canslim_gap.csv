@@ -1,151 +1,151 @@
 ﻿C,A,N,S,L,I,M,n_pass,verdict,name,ticker,market,last,pivot
-unknown,pass,pass,pass,pass,unknown,pass,5,partial,TSE7552,7552.T,JP,4885.0,4335.0
-unknown,fail,pass,pass,pass,pass,pass,5,fail,TSE8418,8418.T,JP,3494.0,3307.0
-unknown,fail,pass,pass,pass,pass,pass,5,fail,TSE7180,7180.T,JP,1718.0,1649.0
-fail,fail,fail,pass,pass,pass,pass,4,fail,Mistras Group Inc Common Stock,MG,US,21.59,20.4
-unknown,unknown,fail,pass,pass,unknown,pass,3,partial,Kodiak Sciences Inc - Common Stock,KOD,US,89.92,43.04
-unknown,unknown,fail,pass,fail,unknown,pass,2,fail,"Amprius Technologies, Inc. Common Stoc",AMPX,US,9.6,10.64
-unknown,fail,pass,pass,fail,unknown,pass,3,fail,TSE6730,6730.T,JP,1610.0,1526.0
-unknown,unknown,fail,pass,fail,unknown,unknown,1,fail,博纳影业,001330.SZ,CN,6.63,6.53
-unknown,fail,fail,pass,fail,fail,unknown,1,fail,吉鑫科技,601218.SS,CN,6.13,6.05
-unknown,unknown,fail,pass,fail,unknown,pass,2,fail,HLB,028300.KQ,KR,38950.0,39700.0
-unknown,unknown,fail,pass,fail,unknown,pass,2,fail,HLB이노베이션,024850.KQ,KR,15650.0,17450.0
-unknown,fail,fail,pass,fail,pass,pass,3,fail,루닛,328130.KQ,KR,11030.0,10500.0
-unknown,fail,fail,pass,fail,unknown,unknown,1,fail,康强电子,002119.SZ,CN,28.27,26.92
-pass,pass,fail,pass,pass,unknown,pass,5,canslim,"Everpure, Inc. Class A common stock",P,US,129.4,113.8
-fail,unknown,fail,pass,fail,unknown,pass,2,fail,"TSS, Inc. - Common Stock",TSSI,US,9.72,9.58
-fail,fail,fail,pass,fail,unknown,pass,2,fail,"Worthington Enterprises, Inc. Common S",WOR,US,60.87,63.13
-unknown,unknown,fail,pass,unknown,unknown,pass,2,partial,노타,486990.KQ,KR,19920.0,22550.0
-unknown,unknown,fail,pass,fail,unknown,pass,2,fail,쓰리빌리언,394800.KQ,KR,6390.0,5530.0
-unknown,unknown,fail,pass,fail,unknown,pass,2,fail,"IonQ, Inc. Common Stock",IONQ,US,44.58,44.43
-unknown,unknown,fail,pass,fail,unknown,pass,2,fail,Quantum Computing Inc. - Common Stock,QUBT,US,8.57,9.35
-unknown,unknown,fail,pass,fail,unknown,pass,2,fail,TSE5541,5541.T,JP,2612.0,2784.0
-unknown,unknown,fail,pass,fail,unknown,unknown,1,fail,智度股份,000676.SZ,CN,6.65,7.72
-unknown,unknown,fail,pass,fail,unknown,pass,2,fail,"Viking Therapeutics, Inc. - Common Sto",VKTX,US,33.03,36.26
-unknown,unknown,pass,unknown,fail,unknown,pass,2,fail,TSE2244,2244.T,JP,3712.0,3712.0
-unknown,pass,fail,pass,pass,unknown,unknown,3,partial,广合科技,001389.SZ,CN,191.84,185.93
-unknown,unknown,pass,pass,pass,unknown,pass,4,partial,심텍,222800.KQ,KR,150700.0,138300.0
-unknown,unknown,fail,pass,fail,unknown,unknown,1,fail,中国长城,000066.SZ,CN,14.42,15.85
-unknown,unknown,fail,pass,fail,unknown,pass,2,fail,서울반도체,046890.KQ,KR,10630.0,10620.0
-unknown,fail,fail,pass,pass,unknown,pass,3,fail,TSE6597,6597.T,JP,3980.0,4050.0
-pass,fail,fail,pass,pass,pass,pass,5,fail,Twilio Inc. Class A Common Stock,TWLO,US,286.98,266.48
-unknown,unknown,fail,unknown,fail,unknown,pass,1,fail,TSE2869,2869.T,JP,3093.0,3091.0
-unknown,unknown,fail,pass,fail,unknown,pass,2,fail,TSE3905,3905.T,JP,1959.0,1822.0
-unknown,pass,fail,pass,fail,unknown,unknown,2,fail,华锡有色,600301.SS,CN,48.64,52.1
-unknown,pass,fail,pass,pass,unknown,unknown,3,partial,宏和科技,603256.SS,CN,139.05,153.4
-fail,fail,fail,pass,fail,pass,pass,3,fail,한섬,020000.KS,KR,21300.0,18700.0
-unknown,fail,fail,pass,fail,pass,unknown,2,fail,歌尔股份,002241.SZ,CN,23.0,24.8
-fail,fail,fail,pass,fail,pass,pass,3,fail,GameStop Corporation Common Stock,GME,US,23.96,23.11
-unknown,fail,pass,pass,fail,fail,unknown,2,fail,博通集成,603068.SS,CN,45.0,44.4
-unknown,fail,pass,pass,pass,fail,unknown,3,fail,新亚制程,002388.SZ,CN,8.27,7.95
-fail,pass,fail,pass,pass,pass,pass,5,fail,Vicor Corporation - Common Stock,VICR,US,285.1,232.74
-pass,fail,fail,pass,pass,pass,pass,5,fail,기가비스,420770.KQ,KR,134600.0,114200.0
-unknown,fail,fail,pass,pass,fail,unknown,2,fail,高争民爆,002827.SZ,CN,62.04,71.8
-unknown,pass,fail,pass,fail,unknown,pass,3,fail,TSE6787,6787.T,JP,25090.0,22700.0
-unknown,fail,fail,pass,fail,pass,unknown,2,fail,万通发展,600246.SS,CN,13.13,14.24
-unknown,fail,fail,pass,pass,fail,pass,3,fail,"Xometry, Inc. - Class A Common Stock",XMTR,US,103.14,100.72
-unknown,pass,pass,pass,pass,fail,unknown,4,partial,澳洋健康,002172.SZ,CN,5.49,5.81
-unknown,fail,fail,pass,pass,unknown,pass,3,fail,TSE5367,5367.T,JP,1449.0,1450.0
-unknown,fail,fail,pass,fail,fail,pass,2,fail,네오셈,253590.KQ,KR,13630.0,13150.0
-unknown,fail,fail,pass,fail,pass,pass,3,fail,해성디에스,195870.KS,KR,62800.0,58800.0
-unknown,fail,fail,pass,pass,pass,pass,4,fail,"GRAIL, Inc. - Common Stock",GRAL,US,132.63,85.49
-fail,unknown,fail,pass,fail,pass,pass,3,fail,"Priority Technology Holdings, Inc. - C",PRTH,US,7.77,6.17
-unknown,fail,fail,pass,fail,pass,pass,3,fail,Critical Metals Corp. - Ordinary Share,CRML,US,7.65,8.56
-unknown,fail,fail,pass,fail,pass,pass,3,fail,Twin Vee PowerCats Co. - Common Stock,VEEE,US,13.69,10.84
-pass,fail,fail,pass,pass,fail,pass,4,fail,Arm Holdings plc - American Depositary,ARM,US,283.33,287.15
-unknown,fail,fail,pass,pass,pass,pass,4,fail,Intel Corporation - Common Stock,INTC,US,116.03,111.37
-fail,fail,fail,pass,fail,pass,pass,3,fail,"Coinbase Global, Inc. - Class A Common",COIN,US,191.79,196.21
-pass,fail,fail,pass,pass,pass,pass,5,fail,"Advanced Micro Devices, Inc. - Common ",AMD,US,607.87,559.91
-unknown,fail,fail,pass,fail,pass,pass,3,fail,"Sharplink, Inc. - Common Stock",SBET,US,9.5,9.49
-unknown,fail,fail,pass,unknown,pass,fail,2,fail,MONTAGE TECH,6809.HK,HK,294.0,303.0
-fail,fail,fail,pass,fail,pass,pass,3,fail,Strategy Inc - Class A Common Stock,MSTR,US,157.14,154.02
-unknown,fail,fail,pass,fail,pass,pass,3,fail,"Bakkt, Inc. Class A Common Stock",BKKT,US,8.0,9.02
-unknown,pass,fail,pass,unknown,pass,pass,4,partial,Hyperliquid Strategies Inc - Common St,PURR,US,12.08,14.47
-unknown,fail,fail,pass,fail,pass,pass,3,fail,케이엠더블유,032500.KQ,KR,19080.0,19520.0
-fail,fail,fail,pass,fail,pass,pass,3,fail,Bullish Ordinary Shares,BLSH,US,35.99,39.56
-unknown,fail,fail,pass,pass,fail,pass,3,fail,아이씨티케이,456010.KQ,KR,23800.0,20550.0
-unknown,fail,fail,pass,pass,pass,pass,4,fail,Cybin Inc. - Common Stock,HELP,US,12.59,14.35
-unknown,fail,fail,pass,fail,fail,unknown,1,fail,中晶科技,003026.SZ,CN,33.32,37.0
-pass,fail,fail,pass,pass,pass,pass,5,fail,TORM plc - Class A Common Stock,TRMD,US,35.42,37.22
-fail,pass,fail,pass,fail,unknown,pass,3,fail,RFHIC,218410.KQ,KR,58900.0,54700.0
-unknown,fail,pass,pass,fail,pass,pass,4,fail,TSE9902,9902.T,JP,3185.0,3245.0
-fail,fail,fail,pass,fail,fail,pass,2,fail,"Dynatrace, Inc. Common Stock",DT,US,57.84,56.27
-unknown,fail,pass,pass,fail,pass,unknown,3,fail,科森科技,603626.SS,CN,23.91,21.69
-unknown,fail,fail,pass,fail,pass,unknown,2,fail,中材科技,002080.SZ,CN,54.81,63.7
-fail,fail,fail,pass,fail,pass,pass,3,fail,코미코,183300.KQ,KR,33450.0,30250.0
-unknown,fail,fail,pass,pass,pass,unknown,3,fail,共达电声,002655.SZ,CN,34.37,40.77
-unknown,fail,pass,pass,pass,pass,pass,5,fail,TSE4933,4933.T,JP,2119.0,1681.0
-unknown,fail,fail,pass,pass,pass,pass,4,fail,"PubMatic, Inc. - Class A Common Stock",PUBM,US,18.41,17.88
-fail,fail,fail,pass,fail,pass,pass,3,fail,Generac Holdlings Inc. Common Stock,GNRC,US,205.21,212.6
-unknown,unknown,fail,pass,fail,unknown,pass,2,fail,비나텍,126340.KQ,KR,96000.0,76200.0
-unknown,fail,fail,pass,fail,pass,unknown,2,fail,西陇科学,002584.SZ,CN,8.68,9.55
-fail,pass,fail,pass,fail,fail,pass,3,fail,"Magnite, Inc. - Common Stock",MGNI,US,23.4,25.79
-unknown,fail,fail,pass,pass,pass,pass,4,fail,CMB.TECH NV Ordinary Shares,CMBT,US,19.05,19.97
-unknown,unknown,fail,pass,pass,unknown,pass,3,partial,오이솔루션,138080.KQ,KR,28500.0,26000.0
-unknown,fail,fail,pass,fail,fail,unknown,1,fail,北自科技,603082.SS,CN,42.0,52.98
-fail,fail,fail,pass,fail,pass,pass,3,fail,Radware Ltd. - Ordinary Shares,RDWR,US,29.46,30.17
-fail,fail,fail,pass,fail,pass,pass,3,fail,GFL Environmental Inc. Subordinate vot,GFL,US,41.4,44.0
-unknown,fail,fail,pass,fail,fail,fail,1,fail,LUYUAN GP HLDG,2451.HK,HK,14.19,17.35
-unknown,unknown,fail,pass,unknown,pass,fail,2,fail,INSILICO,3696.HK,HK,55.4,55.4
-pass,pass,fail,pass,fail,pass,pass,5,fail,Aura Minerals Inc. - Common Shares,AUGO,US,77.72,90.64
-fail,fail,fail,pass,fail,pass,pass,3,fail,두산,000150.KS,KR,1397000.0,1397000.0
-unknown,fail,fail,pass,fail,fail,unknown,1,fail,川润股份,002272.SZ,CN,14.23,18.13
-fail,pass,fail,pass,fail,pass,pass,4,fail,LS에코에너지,229640.KS,KR,62900.0,51900.0
-unknown,pass,pass,pass,pass,pass,pass,6,partial,TSE4417,4417.T,JP,5470.0,5060.0
-unknown,pass,pass,pass,pass,unknown,pass,5,partial,TSE4258,4258.T,JP,5520.0,5230.0
-unknown,fail,fail,pass,fail,unknown,pass,2,fail,TSE4704,4704.T,JP,6558.0,6100.0
-unknown,fail,fail,pass,fail,pass,unknown,2,fail,天顺风能,002531.SZ,CN,7.64,8.12
-unknown,fail,fail,pass,fail,fail,unknown,1,fail,金龙羽,002882.SZ,CN,24.51,25.65
-unknown,fail,fail,pass,unknown,fail,pass,2,fail,티엠씨,217590.KS,KR,13870.0,13490.0
-unknown,fail,fail,pass,fail,pass,unknown,2,fail,大金重工,002487.SZ,CN,42.93,40.87
-pass,fail,fail,pass,pass,pass,pass,5,fail,DB하이텍,000990.KS,KR,140400.0,120000.0
-fail,fail,fail,pass,pass,fail,pass,3,fail,네패스,033640.KQ,KR,29075.0,24300.0
-unknown,fail,fail,pass,pass,pass,pass,4,fail,TSE6191,6191.T,JP,1359.0,1073.0
-unknown,fail,fail,pass,fail,fail,unknown,1,fail,天融信,002212.SZ,CN,7.38,7.4
-unknown,fail,fail,pass,pass,fail,pass,3,fail,TSE3444,3444.T,JP,1075.0,1130.0
-unknown,fail,fail,pass,fail,fail,pass,2,fail,"Vera Therapeutics, Inc. - Class A Comm",VERA,US,32.5,36.96
-unknown,fail,fail,pass,fail,pass,pass,3,fail,영풍,000670.KS,KR,42150.0,49950.0
-unknown,fail,fail,pass,fail,fail,unknown,1,fail,双星新材,002585.SZ,CN,10.67,11.1
-unknown,pass,fail,pass,fail,pass,pass,4,fail,TSE3692,3692.T,JP,7000.0,6470.0
-fail,fail,fail,pass,fail,fail,pass,2,fail,Waystar Holding Corp. - Common Stock,WAY,US,25.74,26.87
-unknown,unknown,pass,unknown,pass,unknown,pass,3,partial,TSE1671,1671.T,JP,5870.0,5864.0
-unknown,fail,pass,pass,fail,pass,pass,4,fail,TSE2371,2371.T,JP,3799.0,3740.0
+unknown,pass,pass,pass,pass,unknown,pass,5,partial,TSE7552,7552.T,JP,5110.0,4335.0
+unknown,unknown,pass,unknown,fail,unknown,pass,2,fail,TSE2244,2244.T,JP,3729.0,3712.0
+unknown,fail,pass,pass,pass,pass,pass,5,fail,TSE8418,8418.T,JP,3481.0,3307.0
+unknown,fail,pass,pass,pass,pass,pass,5,fail,TSE7180,7180.T,JP,1697.5,1649.0
+fail,unknown,fail,pass,fail,unknown,pass,2,fail,TCC스틸,002710.KS,KR,14400.0,14140.0
+unknown,unknown,fail,pass,fail,unknown,pass,2,fail,Summit Therapeutics Inc.  - Common Sto,SMMT,US,16.39,18.83
+unknown,unknown,fail,pass,fail,unknown,pass,2,fail,Navitas Semiconductor Corporation - Co,NVTS,US,11.73,12.63
+unknown,unknown,fail,pass,pass,unknown,pass,3,partial,Kodiak Sciences Inc - Common Stock,KOD,US,91.12,43.04
+unknown,fail,pass,pass,fail,unknown,pass,3,fail,TSE6730,6730.T,JP,1607.0,1526.0
+unknown,unknown,fail,pass,fail,unknown,pass,2,fail,"Amprius Technologies, Inc. Common Stoc",AMPX,US,9.53,10.64
+pass,fail,fail,pass,fail,unknown,pass,3,fail,원익머트리얼즈,104830.KQ,KR,41150.0,38850.0
+unknown,unknown,fail,pass,fail,unknown,fail,1,fail,博纳影业,001330.SZ,CN,6.58,6.53
+unknown,fail,fail,pass,fail,fail,fail,1,fail,吉鑫科技,601218.SS,CN,6.08,6.05
+fail,fail,fail,pass,fail,unknown,pass,2,fail,세아제강지주,003030.KS,KR,113500.0,118800.0
+unknown,pass,fail,pass,fail,unknown,pass,3,fail,TSE6787,6787.T,JP,24500.0,24890.0
+fail,fail,fail,pass,fail,pass,pass,3,fail,SKC,011790.KS,KR,97000.0,93700.0
+unknown,unknown,fail,pass,fail,unknown,pass,2,fail,HLB,028300.KQ,KR,39750.0,39700.0
+unknown,unknown,fail,pass,fail,unknown,pass,2,fail,HLB이노베이션,024850.KQ,KR,15590.0,17450.0
+unknown,fail,fail,pass,fail,pass,pass,3,fail,루닛,328130.KQ,KR,10500.0,10500.0
+unknown,fail,fail,pass,fail,unknown,fail,1,fail,康强电子,002119.SZ,CN,25.8,26.92
+pass,pass,fail,pass,pass,unknown,pass,5,canslim,"Everpure, Inc. Class A common stock",P,US,130.05,113.8
+fail,unknown,fail,pass,fail,unknown,pass,2,fail,"TSS, Inc. - Common Stock",TSSI,US,9.82,9.58
+fail,fail,fail,pass,fail,unknown,pass,2,fail,"Worthington Enterprises, Inc. Common S",WOR,US,59.94,63.13
+unknown,unknown,fail,pass,unknown,unknown,pass,2,partial,노타,486990.KQ,KR,19610.0,22550.0
+unknown,unknown,fail,pass,fail,unknown,pass,2,fail,쓰리빌리언,394800.KQ,KR,6490.0,5530.0
+unknown,unknown,fail,pass,fail,unknown,pass,2,fail,"IonQ, Inc. Common Stock",IONQ,US,43.91,44.43
+unknown,unknown,fail,pass,fail,unknown,pass,2,fail,Quantum Computing Inc. - Common Stock,QUBT,US,8.46,9.35
+unknown,unknown,fail,pass,fail,unknown,pass,2,fail,TSE5541,5541.T,JP,2610.0,2784.0
+unknown,unknown,fail,pass,fail,unknown,fail,1,fail,智度股份,000676.SZ,CN,6.56,7.72
+unknown,unknown,fail,pass,fail,unknown,pass,2,fail,"Viking Therapeutics, Inc. - Common Sto",VKTX,US,31.81,36.26
+unknown,pass,fail,pass,pass,unknown,fail,3,fail,广合科技,001389.SZ,CN,176.66,185.93
+unknown,unknown,pass,pass,pass,unknown,pass,4,partial,심텍,222800.KQ,KR,148700.0,138300.0
+unknown,unknown,fail,pass,fail,unknown,fail,1,fail,中国长城,000066.SZ,CN,14.1,15.85
+unknown,unknown,fail,pass,fail,unknown,pass,2,fail,서울반도체,046890.KQ,KR,10660.0,10620.0
+unknown,fail,fail,pass,pass,unknown,pass,3,fail,TSE6597,6597.T,JP,3955.0,4050.0
+pass,fail,fail,pass,pass,pass,pass,5,fail,Twilio Inc. Class A Common Stock,TWLO,US,290.78,266.48
+unknown,unknown,fail,unknown,fail,unknown,pass,1,fail,TSE2869,2869.T,JP,3100.0,3091.0
+unknown,unknown,fail,pass,fail,unknown,pass,2,fail,TSE3905,3905.T,JP,2041.0,1822.0
+unknown,pass,fail,pass,fail,unknown,fail,2,fail,华锡有色,600301.SS,CN,49.83,52.1
+unknown,pass,fail,pass,pass,unknown,fail,3,fail,宏和科技,603256.SS,CN,130.7,153.4
+unknown,fail,pass,pass,pass,fail,fail,3,fail,新亚制程,002388.SZ,CN,9.1,7.95
+fail,fail,fail,pass,fail,pass,pass,3,fail,한섬,020000.KS,KR,21500.0,18700.0
+unknown,fail,fail,pass,fail,pass,fail,2,fail,歌尔股份,002241.SZ,CN,22.79,24.8
+fail,fail,fail,pass,fail,pass,pass,3,fail,GameStop Corporation Common Stock,GME,US,23.76,23.11
+unknown,fail,pass,pass,fail,fail,fail,2,fail,博通集成,603068.SS,CN,44.85,44.4
+fail,pass,fail,pass,pass,pass,pass,5,fail,Vicor Corporation - Common Stock,VICR,US,290.68,232.74
+pass,fail,fail,pass,pass,pass,pass,5,fail,기가비스,420770.KQ,KR,128000.0,114200.0
+unknown,fail,fail,pass,pass,fail,fail,2,fail,高争民爆,002827.SZ,CN,59.0,71.8
+unknown,fail,fail,pass,fail,pass,fail,2,fail,万通发展,600246.SS,CN,12.58,14.24
+unknown,fail,fail,pass,pass,fail,pass,3,fail,"Xometry, Inc. - Class A Common Stock",XMTR,US,104.23,100.72
+unknown,pass,pass,pass,pass,fail,fail,4,fail,澳洋健康,002172.SZ,CN,5.43,5.81
+unknown,fail,fail,pass,pass,unknown,pass,3,fail,TSE5367,5367.T,JP,1477.0,1450.0
+unknown,fail,fail,pass,fail,fail,pass,2,fail,네오셈,253590.KQ,KR,14120.0,13150.0
+unknown,fail,fail,pass,fail,pass,pass,3,fail,해성디에스,195870.KS,KR,62200.0,58800.0
+unknown,fail,fail,pass,pass,pass,pass,4,fail,"GRAIL, Inc. - Common Stock",GRAL,US,136.57,85.49
+fail,unknown,fail,pass,fail,pass,pass,3,fail,"Priority Technology Holdings, Inc. - C",PRTH,US,7.79,6.17
+unknown,fail,fail,pass,fail,pass,pass,3,fail,Critical Metals Corp. - Ordinary Share,CRML,US,7.38,8.56
+unknown,fail,fail,pass,fail,pass,pass,3,fail,Twin Vee PowerCats Co. - Common Stock,VEEE,US,13.39,10.84
+pass,fail,fail,pass,pass,fail,pass,4,fail,Arm Holdings plc - American Depositary,ARM,US,293.67,287.15
+unknown,fail,fail,pass,pass,pass,pass,4,fail,Intel Corporation - Common Stock,INTC,US,115.93,111.37
+fail,fail,fail,pass,fail,pass,pass,3,fail,"Coinbase Global, Inc. - Class A Common",COIN,US,190.02,196.21
+pass,fail,fail,pass,pass,pass,pass,5,fail,"Advanced Micro Devices, Inc. - Common ",AMD,US,607.57,559.91
+unknown,fail,fail,pass,fail,pass,pass,3,fail,"Sharplink, Inc. - Common Stock",SBET,US,9.46,9.49
+unknown,fail,fail,pass,unknown,pass,fail,2,fail,MONTAGE TECH,6809.HK,HK,287.4,303.0
+fail,fail,fail,pass,fail,pass,pass,3,fail,Strategy Inc - Class A Common Stock,MSTR,US,154.67,154.02
+unknown,fail,fail,pass,fail,pass,pass,3,fail,"Bakkt, Inc. Class A Common Stock",BKKT,US,8.1,9.02
+unknown,pass,fail,pass,unknown,pass,pass,4,partial,Hyperliquid Strategies Inc - Common St,PURR,US,11.92,14.47
+unknown,fail,fail,pass,fail,pass,pass,3,fail,케이엠더블유,032500.KQ,KR,18510.0,19520.0
+fail,fail,fail,pass,fail,pass,pass,3,fail,Bullish Ordinary Shares,BLSH,US,35.68,39.56
+fail,fail,fail,pass,pass,pass,pass,4,fail,Mistras Group Inc Common Stock,MG,US,21.34,20.4
+unknown,fail,fail,pass,fail,fail,pass,2,fail,아이씨티케이,456010.KQ,KR,22350.0,20550.0
+unknown,fail,fail,pass,pass,pass,pass,4,fail,Cybin Inc. - Common Stock,HELP,US,12.7,14.35
+unknown,fail,fail,pass,fail,fail,fail,1,fail,中晶科技,003026.SZ,CN,32.4,37.0
+pass,fail,fail,pass,pass,pass,pass,5,fail,TORM plc - Class A Common Stock,TRMD,US,36.15,37.22
+fail,pass,fail,pass,fail,unknown,pass,3,fail,RFHIC,218410.KQ,KR,58100.0,54700.0
+unknown,fail,pass,pass,fail,pass,pass,4,fail,TSE9902,9902.T,JP,3210.0,3245.0
+fail,fail,fail,pass,fail,fail,pass,2,fail,"Dynatrace, Inc. Common Stock",DT,US,57.53,56.27
+unknown,fail,pass,pass,fail,pass,fail,3,fail,科森科技,603626.SS,CN,24.22,21.69
+unknown,fail,fail,pass,fail,pass,fail,2,fail,中材科技,002080.SZ,CN,54.15,63.7
+fail,fail,fail,pass,fail,pass,pass,3,fail,코미코,183300.KQ,KR,34950.0,30250.0
+unknown,fail,fail,pass,pass,pass,fail,3,fail,共达电声,002655.SZ,CN,32.54,40.77
+unknown,fail,pass,pass,pass,pass,pass,5,fail,TSE4933,4933.T,JP,2175.0,1681.0
+unknown,fail,fail,pass,pass,pass,pass,4,fail,"PubMatic, Inc. - Class A Common Stock",PUBM,US,18.8,17.88
+fail,fail,fail,pass,fail,pass,pass,3,fail,Generac Holdlings Inc. Common Stock,GNRC,US,212.22,212.6
+fail,pass,fail,pass,pass,fail,pass,4,fail,"Magnite, Inc. - Common Stock",MGNI,US,25.67,25.79
+unknown,unknown,fail,pass,fail,unknown,pass,2,fail,비나텍,126340.KQ,KR,92200.0,76200.0
+unknown,fail,fail,pass,fail,pass,fail,2,fail,西陇科学,002584.SZ,CN,8.79,9.55
+unknown,fail,fail,pass,pass,pass,pass,4,fail,CMB.TECH NV Ordinary Shares,CMBT,US,18.95,19.97
+unknown,unknown,fail,pass,pass,unknown,pass,3,partial,오이솔루션,138080.KQ,KR,28150.0,26000.0
+unknown,fail,fail,pass,fail,fail,fail,1,fail,北自科技,603082.SS,CN,41.25,52.98
+fail,fail,fail,pass,fail,pass,pass,3,fail,Radware Ltd. - Ordinary Shares,RDWR,US,29.25,30.17
+fail,fail,fail,pass,fail,pass,pass,3,fail,GFL Environmental Inc. Subordinate vot,GFL,US,42.2,44.0
+unknown,fail,fail,pass,fail,fail,fail,1,fail,LUYUAN GP HLDG,2451.HK,HK,14.09,17.35
+unknown,unknown,fail,pass,unknown,pass,fail,2,fail,INSILICO,3696.HK,HK,60.1,55.4
+pass,pass,fail,pass,fail,pass,pass,5,fail,Aura Minerals Inc. - Common Shares,AUGO,US,79.36,90.64
+fail,fail,fail,pass,fail,pass,pass,3,fail,두산,000150.KS,KR,1394000.0,1397000.0
+unknown,fail,fail,pass,fail,fail,fail,1,fail,川润股份,002272.SZ,CN,13.99,18.13
+fail,pass,fail,pass,fail,pass,pass,4,fail,LS에코에너지,229640.KS,KR,61800.0,51900.0
+unknown,pass,pass,pass,pass,pass,pass,6,partial,TSE4417,4417.T,JP,5590.0,5060.0
+unknown,fail,fail,pass,fail,unknown,pass,2,fail,TSE4704,4704.T,JP,6543.0,6100.0
+unknown,fail,fail,pass,fail,pass,fail,2,fail,天顺风能,002531.SZ,CN,7.98,8.12
+unknown,pass,pass,pass,pass,unknown,pass,5,partial,TSE4258,4258.T,JP,5410.0,5230.0
+unknown,fail,fail,pass,fail,fail,fail,1,fail,金龙羽,002882.SZ,CN,24.98,25.65
+unknown,fail,fail,pass,unknown,fail,pass,2,fail,티엠씨,217590.KS,KR,13930.0,13490.0
+unknown,fail,fail,pass,fail,pass,fail,2,fail,大金重工,002487.SZ,CN,46.29,40.87
+pass,fail,fail,pass,pass,pass,pass,5,fail,DB하이텍,000990.KS,KR,139700.0,120000.0
+fail,fail,fail,pass,pass,fail,pass,3,fail,네패스,033640.KQ,KR,30450.0,24300.0
+unknown,fail,pass,pass,pass,pass,pass,5,fail,TSE6191,6191.T,JP,1447.0,1073.0
+unknown,fail,fail,pass,pass,fail,pass,3,fail,TSE3444,3444.T,JP,1096.0,1130.0
+unknown,fail,fail,pass,fail,fail,fail,1,fail,天融信,002212.SZ,CN,7.21,7.4
+unknown,fail,fail,pass,fail,fail,pass,2,fail,"Vera Therapeutics, Inc. - Class A Comm",VERA,US,32.38,36.96
+unknown,fail,fail,pass,fail,pass,pass,3,fail,영풍,000670.KS,KR,40900.0,49950.0
+unknown,fail,fail,pass,fail,fail,fail,1,fail,双星新材,002585.SZ,CN,10.35,11.1
+unknown,pass,fail,pass,fail,pass,pass,4,fail,TSE3692,3692.T,JP,7200.0,6470.0
+fail,fail,fail,pass,fail,fail,pass,2,fail,Waystar Holding Corp. - Common Stock,WAY,US,25.07,26.87
+unknown,unknown,pass,unknown,pass,unknown,pass,3,partial,TSE2038,2038.T,JP,2986.0,2536.0
+unknown,unknown,pass,unknown,pass,unknown,pass,3,partial,TSE1671,1671.T,JP,5992.0,5864.0
+unknown,fail,pass,pass,fail,pass,pass,4,fail,TSE2371,2371.T,JP,3821.0,3740.0
 fail,unknown,fail,pass,fail,unknown,pass,2,fail,샌즈랩,411080.KQ,KR,6540.0,5510.0
-unknown,unknown,pass,unknown,pass,unknown,pass,3,partial,TSE2038,2038.T,JP,2899.0,2536.0
-unknown,unknown,pass,unknown,fail,unknown,pass,2,fail,TSE1699,1699.T,JP,689.4,682.0
-unknown,fail,fail,pass,fail,fail,unknown,1,fail,闽东电力,000993.SZ,CN,16.28,13.88
-unknown,fail,fail,pass,pass,fail,unknown,2,fail,三孚股份,603938.SS,CN,43.56,49.56
-unknown,fail,fail,pass,fail,pass,pass,3,fail,Roblox Corporation Class A Common Stoc,RBLX,US,41.86,46.5
-pass,fail,fail,pass,pass,pass,pass,5,fail,Frontline Plc Ordinary Shares,FRO,US,48.1,49.56
-pass,fail,fail,pass,fail,pass,pass,4,fail,Obsidian Energy Ltd. Common Shares,OBE,US,10.67,13.08
-unknown,fail,fail,pass,pass,fail,pass,3,fail,ACV Auctions Inc. Class A Common Stock,ACVA,US,10.46,8.38
-pass,fail,fail,pass,pass,pass,pass,5,fail,"Frequency Electronics, Inc. - Common S",FEIM,US,82.49,80.6
-unknown,fail,fail,pass,unknown,pass,pass,3,fail,에스투더블유,488280.KQ,KR,15180.0,11830.0
-fail,fail,fail,pass,fail,fail,pass,2,fail,샘표식품,248170.KS,KR,22100.0,30150.0
-unknown,fail,fail,pass,fail,fail,unknown,1,fail,湖南发展,000722.SZ,CN,12.88,14.74
-fail,fail,fail,pass,fail,fail,pass,2,fail,Woori Financial Group Inc. American De,WF,US,79.26,77.68
-unknown,pass,fail,pass,fail,fail,pass,3,fail,"Inspire Medical Systems, Inc. Common S",INSP,US,70.0,68.5
-unknown,fail,fail,pass,fail,fail,unknown,1,fail,水发燃气,603318.SS,CN,8.65,10.55
-unknown,fail,pass,pass,fail,fail,unknown,2,fail,云煤能源,600792.SS,CN,5.29,4.92
-unknown,unknown,fail,pass,fail,unknown,pass,2,fail,유일로보틱스,388720.KQ,KR,66500.0,77800.0
-unknown,fail,pass,pass,fail,pass,fail,3,fail,CHERVON,2285.HK,HK,26.06,22.5
-unknown,fail,fail,pass,pass,pass,unknown,3,fail,海通发展,603162.SS,CN,12.72,15.47
-unknown,fail,fail,pass,pass,fail,pass,3,fail,CVR Energy Inc. Common Stock,CVI,US,50.75,47.85
-unknown,fail,fail,pass,fail,pass,unknown,2,fail,盾安环境,002011.SZ,CN,12.5,12.54
-pass,fail,fail,pass,pass,pass,pass,5,fail,Tsakos Energy Navigation Ltd Common Sh,TEN,US,46.31,44.51
-pass,fail,fail,pass,fail,pass,pass,4,fail,Kinetik Holdings Inc. Class A Common S,KNTK,US,51.21,56.1
-pass,fail,fail,pass,fail,pass,pass,4,fail,미코,059090.KQ,KR,22100.0,20100.0
-unknown,fail,pass,pass,fail,pass,pass,4,fail,TSE6036,6036.T,JP,3450.0,3650.0
-unknown,fail,pass,pass,pass,pass,unknown,4,fail,招商轮船,601872.SS,CN,19.89,20.99
-unknown,fail,fail,pass,fail,pass,unknown,2,fail,利民股份,002734.SZ,CN,18.64,17.92
-unknown,fail,fail,pass,pass,pass,pass,4,fail,TSE6203,6203.T,JP,2386.0,1912.0
-unknown,fail,fail,pass,pass,pass,pass,4,fail,"Opus Genetics, Inc. - Common Stock",IRD,US,5.05,4.83
-unknown,fail,fail,pass,pass,pass,pass,4,fail,Sasol Ltd. American Depositary Shares,SSL,US,13.93,13.33
-unknown,fail,fail,pass,fail,fail,unknown,1,fail,中百集团,000759.SZ,CN,6.1,7.7
-unknown,fail,fail,pass,fail,unknown,pass,2,fail,범한퓨얼셀,382900.KQ,KR,25700.0,20550.0
-unknown,fail,fail,pass,fail,fail,pass,2,fail,"Chime Financial, Inc. - Class A Common",CHYM,US,26.69,34.44
-fail,fail,fail,pass,fail,fail,pass,2,fail,ODDITY Tech Ltd. - Class A Ordinary Sh,ODD,US,17.6,15.62
-unknown,fail,fail,pass,fail,fail,unknown,1,fail,贵州燃气,600903.SS,CN,6.51,7.25
-unknown,fail,fail,pass,fail,fail,unknown,1,fail,北方铜业,000737.SZ,CN,13.43,15.86
-unknown,fail,fail,pass,fail,pass,unknown,2,fail,中粮糖业,600737.SS,CN,13.8,18.16
-unknown,fail,pass,pass,fail,fail,unknown,2,fail,精华制药,002349.SZ,CN,8.37,8.47
+unknown,unknown,pass,unknown,pass,unknown,pass,3,partial,TSE1699,1699.T,JP,702.7,682.0
+unknown,fail,fail,pass,pass,fail,fail,2,fail,闽东电力,000993.SZ,CN,17.09,13.88
+unknown,fail,fail,pass,pass,fail,fail,2,fail,三孚股份,603938.SS,CN,42.68,49.56
+pass,fail,fail,pass,pass,pass,pass,5,fail,Frontline Plc Ordinary Shares,FRO,US,48.93,49.56
+unknown,fail,fail,pass,fail,pass,pass,3,fail,Roblox Corporation Class A Common Stoc,RBLX,US,41.18,46.5
+pass,fail,fail,pass,fail,pass,pass,4,fail,Obsidian Energy Ltd. Common Shares,OBE,US,10.23,13.08
+unknown,fail,fail,pass,pass,fail,pass,3,fail,ACV Auctions Inc. Class A Common Stock,ACVA,US,10.44,8.38
+pass,fail,fail,pass,pass,pass,pass,5,fail,"Frequency Electronics, Inc. - Common S",FEIM,US,84.15,80.6
+unknown,fail,fail,pass,unknown,pass,pass,3,fail,에스투더블유,488280.KQ,KR,14970.0,11830.0
+fail,fail,fail,pass,fail,fail,pass,2,fail,샘표식품,248170.KS,KR,21850.0,30150.0
+unknown,fail,fail,pass,fail,fail,fail,1,fail,湖南发展,000722.SZ,CN,13.0,14.74
+fail,fail,fail,pass,fail,fail,pass,2,fail,Woori Financial Group Inc. American De,WF,US,79.68,77.68
+unknown,pass,fail,pass,fail,fail,pass,3,fail,"Inspire Medical Systems, Inc. Common S",INSP,US,73.18,68.5
+unknown,fail,fail,pass,fail,fail,fail,1,fail,水发燃气,603318.SS,CN,8.71,10.55
+unknown,fail,pass,pass,fail,fail,fail,2,fail,云煤能源,600792.SS,CN,5.04,4.92
+unknown,unknown,fail,pass,fail,unknown,pass,2,fail,유일로보틱스,388720.KQ,KR,66600.0,77800.0
+unknown,fail,pass,pass,fail,pass,fail,3,fail,CHERVON,2285.HK,HK,27.52,22.5
+unknown,fail,fail,pass,pass,pass,fail,3,fail,海通发展,603162.SS,CN,13.04,15.47
+unknown,fail,fail,pass,pass,fail,pass,3,fail,CVR Energy Inc. Common Stock,CVI,US,50.57,47.85
+unknown,fail,fail,pass,fail,pass,fail,2,fail,盾安环境,002011.SZ,CN,12.6,12.54
+pass,fail,fail,pass,pass,pass,pass,5,fail,Tsakos Energy Navigation Ltd Common Sh,TEN,US,47.17,44.51
+pass,fail,fail,pass,fail,pass,pass,4,fail,Kinetik Holdings Inc. Class A Common S,KNTK,US,51.16,56.1
+pass,fail,fail,pass,fail,pass,pass,4,fail,미코,059090.KQ,KR,23500.0,20100.0
+unknown,fail,pass,pass,fail,pass,pass,4,fail,TSE6036,6036.T,JP,3425.0,3650.0
+unknown,fail,pass,pass,pass,pass,fail,4,fail,招商轮船,601872.SS,CN,20.15,20.99
+unknown,fail,fail,pass,fail,pass,fail,2,fail,利民股份,002734.SZ,CN,18.53,17.92
+unknown,fail,pass,pass,pass,pass,pass,5,fail,TSE6203,6203.T,JP,2570.0,1912.0
+unknown,fail,fail,pass,pass,pass,pass,4,fail,Sasol Ltd. American Depositary Shares,SSL,US,13.85,13.33
+unknown,fail,fail,pass,fail,fail,fail,1,fail,中百集团,000759.SZ,CN,6.15,7.7
+unknown,fail,fail,pass,fail,unknown,pass,2,fail,범한퓨얼셀,382900.KQ,KR,24250.0,20550.0
+unknown,fail,fail,pass,fail,fail,pass,2,fail,"Chime Financial, Inc. - Class A Common",CHYM,US,26.52,34.44
