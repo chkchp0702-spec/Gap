@@ -1,9 +1,11 @@
 name: 갭 돌파 스캔 v2
 
 on:
-  schedule:                   # 두 번 걸어둠 — 첫 번째가 GitHub 사정으로 스킵되면 두 번째가 돈다
-    - cron: "17 21 * * *"        # KST 06:17 매일
-    - cron: "52 22 * * *"        # KST 07:52 매일 (예비)
+  schedule:                   # GitHub 예약은 자주 빠지거나 늦음 → 여러 번 걸고, 오늘 이미 돌았으면 뒤의 것은 건너뜀
+    - cron: "14 20 * * *"        # KST 05:14 (미국 마감 직후)
+    - cron: "34 20 * * *"        # KST 05:34
+    - cron: "54 20 * * *"        # KST 05:54
+    - cron: "24 21 * * *"        # KST 06:24 (예비)
   workflow_dispatch:          # Actions 탭 → Run workflow 로 수동 실행
     inputs:
       check:
