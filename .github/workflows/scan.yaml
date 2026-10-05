@@ -2,8 +2,8 @@ name: 갭 돌파 스캔 v2
 
 on:
   schedule:                   # 두 번 걸어둠 — 첫 번째가 GitHub 사정으로 스킵되면 두 번째가 돈다
-    - cron: "17 21 * * 0-4"        # KST 06:17 월~금
-    - cron: "52 22 * * 0-4"        # KST 07:52 월~금 (예비)
+    - cron: "17 21 * * *"        # KST 06:17 매일
+    - cron: "52 22 * * *"        # KST 07:52 매일 (예비)
   workflow_dispatch:          # Actions 탭 → Run workflow 로 수동 실행
     inputs:
       check:
