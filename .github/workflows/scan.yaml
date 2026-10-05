@@ -161,7 +161,7 @@ jobs:
           #    2) 갭일 시가가 그 박스 고점 위에서 열려야 하며 (1차 목록)
           #    3) 갭일 저가까지 박스 고점 위면 '완전 돌파' (상위 목록 필수)
           #    4) 지금도 박스 고점 위에 있어야 '갭 유지'
-          G = dict(gap_min=0.02,        # 시가가 전일 종가 대비 +2% 이상
+          G = dict(gap_min=0.03,        # 10/5: 시가가 전일 종가 대비 +3% 이상 (사람 눈에 "갭"으로 보이는 크기)
                    vol_min=1.5,         # 갭일 거래량 / 직전 50일 평균 (1차)
                    top_vol=1.6,         # 상위 목록
                    box_min=20,          # 횡보 최소 4주 (거래일)
@@ -336,7 +336,7 @@ jobs:
 
 
           def keep_chart(tk, c, li, bi, ri, piv, he=None, bo_i=None):
-              st = max(0, li - 20)
+              st = max(0, li - 60)          # 컵 앞 석 달도 보여줘야 눈으로 '사전 상승'을 볼 수 있다
               CHART[tk] = dict(c=np.asarray(c[st:], dtype=np.float32), li=li - st, bi=bi - st, ri=ri - st,
                      he=None if he is None else he - st, bo=None if bo_i is None else bo_i - st,
                      piv=float(piv))
@@ -542,6 +542,12 @@ jobs:
                       W(g, f"갭 +{gap*100:.1f}% 거래량 {vm:.1f}배 — 그러나 시가 {o[g]:.2f} 가 박스 고점 {box_hi:.2f} 아래(성곽 안 갭)")
                       continue                                  # 박스 안에서 뛴 갭 — 제외
 
+                  if c[g] <= box_hi:                            # 10/5: 갭 날 종가까지 박스 위에 있어야 (윗꼬리로 끝난 갭 제외)
+                      W(g, f"갭 +{gap*100:.1f}% — 그러나 그날 종가 {c[g]:.2f} 가 박스 고점 {box_hi:.2f} 아래(윗꼬리)")
+                      continue
+                  if last <= box_hi:                            # 10/5: 지금도 박스 위에 있어야 (갭 메움·박스 복귀 제외)
+                      W(g, f"갭 +{gap*100:.1f}% — 그러나 현재가 {last:.2f} 가 박스 고점 {box_hi:.2f} 아래로 복귀(갭 메움)")
+                      continue
                   hi6m = float(np.max(h[max(0, g - 126):g]))    # 갭 직전 6개월 고점 = '성곽'
                   over6m = bool(o[g] > hi6m)                    # 성곽을 시가로 넘었는가
                   clean = bool(l[g] > box_hi)                   # 저가까지 박스 위 = 완전 돌파
@@ -1899,6 +1905,19 @@ jobs:
                   l1 = l1[cols]
                   l1.to_csv(CFG["list1"], index=False, encoding="utf-8-sig")
                   l1[l1["막돌파"] == True].to_csv(CFG["list0"], index=False, encoding="utf-8-sig")  # noqa
+                  # ── 사람 눈 확인용 차트 자료 (아침 '눈 검사' 작업이 이걸로 그림을 그려 본다)
+                  try:
+                      _cj = {}
+                      for _tk in l1["코드"].astype(str):
+                          _d = CHART.get(_tk)
+                          if not _d:
+                              continue
+                          _cj[_tk] = {k: ([round(float(x), 4) for x in v] if hasattr(v, "__len__") and not isinstance(v, str) else v)
+                                      for k, v in _d.items()}
+                      json.dump(_cj, open(f"results/charts_{MODE}.json", "w", encoding="utf-8"), separators=(",", ":"))
+                      log(f"눈 검사용 차트 {len(_cj)}종목 저장")
+                  except Exception as _e:
+                      log(f"차트 저장 실패 {_e}")
                   log(f"섹터 확인 {int((l1['섹터'] != '미분류').sum())}/{len(l1)}종목")
               else:
                   save_info()
@@ -1954,7 +1973,7 @@ jobs:
                       "거래량배수", "박스고점", "갭시가대비%", "최고가대비%", "투자포인트"],
                   TC=["NEW", "종목명", "코드", "차트", "모양점수", "모양", "갭점수", "섹터", "연속일", "현재가", "갭크기%",
                       "거래량배수", "횡보주", "횡보폭%", "완전돌파", "투자포인트"],
-                  score="갭점수", foot="횡보 박스를 갭으로 뛰어넘은 종목 자동 스캔 결과.")
+                  score="갭점수", foot="횡보 박스를 +3% 이상 갭으로 뛰어넘고 종가도 박스 위에 있는 종목 자동 스캔 결과. 아침에 차트를 눈으로 보고 갭 상승으로 안 보이는 종목은 뺍니다.")
 
           def mini_chart(tk, big=False):
               """
