@@ -1,7 +1,7 @@
 ﻿C,A,N,S,L,I,M,n_pass,verdict,name,ticker,market,last,pivot
 unknown,pass,pass,pass,fail,fail,fail,3,fail,"Hasbro, Inc. - Common Stock",HAS,US,117.44,100.05
 fail,fail,pass,pass,fail,unknown,fail,2,fail,Robert Half Inc. Common Stock,RHI,US,45.87,38.96
-unknown,fail,pass,pass,fail,pass,fail,3,fail,TSE6036,6036.T,JP,3930.0,3800.0
+unknown,pass,pass,pass,fail,pass,fail,4,fail,TSE6036,6036.T,JP,3930.0,3800.0
 fail,fail,pass,pass,fail,unknown,fail,2,fail,Crown Castle Inc. Common Stock,CCI,US,85.97,84.53
 unknown,pass,pass,pass,pass,pass,fail,5,fail,TSE4475,4475.T,JP,2470.0,2319.0
 fail,pass,pass,pass,fail,pass,fail,4,fail,UNIVERSAL INSURANCE HOLDINGS INC Commo,UVE,US,48.84,48.74
@@ -24,7 +24,7 @@ unknown,unknown,pass,pass,fail,unknown,fail,2,fail,Cleveland-Cliffs Inc. Common 
 unknown,fail,pass,pass,fail,unknown,fail,2,fail,TSE4307,4307.T,JP,6174.0,5754.0
 unknown,unknown,fail,pass,fail,unknown,fail,1,fail,TSE4506,4506.T,JP,1853.5,1699.0
 fail,fail,fail,pass,fail,unknown,fail,1,fail,Ericsson - American Depositary Shares ,ERIC,US,10.66,10.44
-unknown,pass,pass,pass,pass,unknown,unknown,4,partial,冰山冷热,000530.SZ,CN,9.53,6.3
+unknown,fail,pass,pass,pass,fail,unknown,3,fail,冰山冷热,000530.SZ,CN,9.53,6.3
 fail,fail,pass,pass,fail,unknown,fail,2,fail,에스원,012750.KS,KR,96000.0,89000.0
 unknown,pass,fail,pass,pass,unknown,fail,3,fail,TSE4240,4240.T,JP,656.0,382.0
 unknown,fail,pass,pass,pass,fail,unknown,3,fail,慈文传媒,002343.SZ,CN,10.89,7.36
@@ -69,7 +69,7 @@ unknown,fail,pass,pass,fail,unknown,fail,2,fail,TSE9632,9632.T,JP,5330.0,4170.0
 unknown,fail,fail,pass,fail,unknown,fail,1,fail,비아트론,141000.KQ,KR,11420.0,9780.0
 unknown,fail,fail,pass,fail,fail,fail,1,fail,Synaptics Incorporated - Common Stock,SYNA,US,117.26,113.36
 fail,fail,fail,pass,fail,fail,fail,1,fail,"Everforth, Inc. Common Stock",EFOR,US,43.59,34.42
-fail,fail,pass,pass,fail,pass,fail,3,fail,Accenture plc Class A Ordinary Shares ,ACN,US,249.37,197.63
+pass,fail,pass,pass,fail,pass,fail,4,fail,Accenture plc Class A Ordinary Shares ,ACN,US,249.37,197.63
 unknown,fail,pass,pass,fail,pass,fail,3,fail,TSE6730,6730.T,JP,1622.0,1526.0
 unknown,fail,fail,pass,fail,pass,fail,2,fail,HLB,028300.KQ,KR,41600.0,39700.0
 unknown,fail,pass,pass,pass,pass,fail,4,fail,TSE7552,7552.T,JP,5850.0,4335.0
@@ -135,7 +135,7 @@ unknown,fail,pass,pass,fail,pass,fail,3,fail,H&H INTL HLDG,1112.HK,HK,20.52,16.3
 fail,pass,pass,pass,fail,pass,fail,4,fail,"Salesforce, Inc. Common Stock",CRM,US,248.57,213.17
 fail,fail,pass,pass,fail,pass,fail,3,fail,Veeva Systems Inc. Class A Common Stoc,VEEV,US,323.04,253.49
 fail,pass,pass,pass,fail,fail,fail,3,fail,"Nutanix, Inc. - Class A Common Stock",NTNX,US,70.58,68.88
-fail,pass,pass,pass,pass,fail,fail,4,fail,Abercrombie & Fitch Company Common Sto,ANF,US,155.64,119.92
+fail,pass,pass,pass,pass,fail,fail,4,fail,Abercrombie & Fitch Company Common Sto,ANF,US,155.82,119.92
 unknown,fail,fail,pass,pass,fail,unknown,2,fail,金健米业,600127.SS,CN,11.46,7.11
 unknown,fail,fail,pass,fail,unknown,fail,1,fail,TS LINES,2510.HK,HK,12.31,12.09
 unknown,fail,pass,pass,fail,pass,fail,3,fail,The J.M. Smucker Company Common Stock,SJM,US,129.98,127.65
