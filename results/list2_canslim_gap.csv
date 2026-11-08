@@ -1,10 +1,10 @@
 ﻿C,A,N,S,L,I,M,n_pass,verdict,name,ticker,market,last,pivot
 fail,fail,pass,pass,pass,fail,fail,3,fail,Encore Capital Group Inc - Common Stoc,ECPG,US,114.14,105.98
 fail,fail,pass,pass,fail,pass,fail,3,fail,ICICI Bank Limited Common Stock,IBN,US,33.89,31.68
-fail,fail,pass,pass,fail,unknown,fail,2,fail,TSE2222,2222.T,JP,2843.5,2787.0
-unknown,fail,pass,pass,pass,unknown,fail,3,fail,"Ardent Health, Inc. Common Stock",ARDT,US,17.3,13.25
-unknown,fail,pass,pass,fail,unknown,fail,2,fail,TSE2670,2670.T,JP,3201.0,3121.0
-unknown,fail,pass,pass,fail,unknown,fail,2,fail,TSE8923,8923.T,JP,1912.0,1891.0
+fail,fail,pass,pass,fail,pass,fail,3,fail,TSE2222,2222.T,JP,2843.5,2787.0
+unknown,fail,pass,pass,pass,pass,fail,4,fail,"Ardent Health, Inc. Common Stock",ARDT,US,17.3,13.25
+unknown,fail,pass,pass,fail,pass,fail,3,fail,TSE2670,2670.T,JP,3201.0,3121.0
+unknown,fail,pass,pass,fail,pass,fail,3,fail,TSE8923,8923.T,JP,1912.0,1891.0
 fail,fail,pass,pass,fail,pass,fail,3,fail,3M Company Common Stock,MMM,US,185.15,184.9
 fail,pass,pass,pass,fail,pass,fail,4,fail,Pelagos Insurance Capital Limited Comm,PLGO,US,27.73,26.58
 fail,fail,pass,pass,fail,pass,fail,3,fail,"W.W. Grainger, Inc. Common Stock",GWW,US,1440.7,1419.91
@@ -17,8 +17,8 @@ fail,fail,pass,pass,fail,fail,fail,2,fail,Labcorp Holdings Inc. Common Stock,LH,
 fail,fail,pass,pass,pass,pass,fail,4,fail,롯데렌탈,089860.KS,KR,58400.0,54100.0
 unknown,unknown,fail,unknown,fail,unknown,fail,0,fail,TSE2870,2870.T,JP,9020.0,8632.0
 unknown,unknown,fail,unknown,fail,unknown,fail,0,fail,TSE1357,1357.T,JP,3465.0,3335.0
-unknown,unknown,pass,pass,pass,unknown,fail,3,fail,"Xeris Biopharma Holdings, Inc. - Commo",XERS,US,15.2,13.74
-unknown,unknown,pass,pass,fail,unknown,fail,2,fail,Unity Software Inc. Common Stock,U,US,51.49,49.49
+unknown,unknown,pass,pass,pass,pass,fail,4,fail,"Xeris Biopharma Holdings, Inc. - Commo",XERS,US,15.2,13.74
+unknown,fail,pass,pass,fail,pass,fail,3,fail,Unity Software Inc. Common Stock,U,US,51.49,49.49
 unknown,pass,pass,pass,fail,unknown,fail,3,fail,TSE9201,9201.T,JP,3277.0,3213.0
 unknown,fail,pass,fail,fail,fail,fail,1,fail,Toyota Motor Corporation Common Stock,TM,US,216.19,200.86
 fail,pass,fail,fail,fail,unknown,fail,1,fail,XIAOMI-W,1810.HK,HK,30.38,29.14
@@ -27,8 +27,8 @@ pass,fail,pass,pass,fail,unknown,fail,3,fail,"Corpay, Inc. Common Stock",CPAY,US
 unknown,unknown,pass,pass,fail,unknown,fail,2,fail,Vericel Corporation - Common Stock,VCEL,US,54.62,46.87
 unknown,unknown,pass,pass,pass,unknown,fail,3,fail,"agilon health, inc. Common Stock",AGL,US,113.39,98.02
 unknown,pass,pass,pass,fail,unknown,fail,3,fail,TSE4612,4612.T,JP,1384.0,1316.0
-unknown,unknown,pass,pass,fail,unknown,fail,2,fail,Enviri Corporation Common Stock,NVRI,US,23.85,21.36
-pass,pass,pass,pass,fail,unknown,fail,4,fail,"Progyny, Inc. - Common Stock",PGNY,US,34.84,30.74
+unknown,fail,pass,pass,fail,fail,fail,2,fail,Enviri Corporation Common Stock,NVRI,US,23.85,21.36
+pass,pass,pass,pass,fail,fail,fail,4,fail,"Progyny, Inc. - Common Stock",PGNY,US,34.84,30.74
 fail,unknown,fail,pass,fail,unknown,fail,1,fail,ADMA Biologics Inc - Common Stock,ADMA,US,12.73,11.9
 pass,unknown,fail,pass,fail,unknown,fail,2,fail,Applovin Corporation - Class A Common ,APP,US,391.22,291.55
 fail,pass,fail,pass,fail,unknown,fail,2,fail,TME-SW,1698.HK,HK,37.28,35.68
